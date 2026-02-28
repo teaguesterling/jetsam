@@ -88,10 +88,10 @@ class TestFullSaveFlow:
         assert "docs.md" in status.stdout
 
     def test_save_with_explicit_files(self, dirty_git_repo: Path):
-        """Save with --files should stage only specified files."""
+        """Save with positional files should stage only specified files."""
         result = _invoke(
             ["--json", "save", "--execute", "-m", "specific save",
-             "--files", "scratch.txt"],
+             "scratch.txt"],
             dirty_git_repo,
         )
 
@@ -246,7 +246,7 @@ class TestMultipleCommitFlow:
             (tmp_git_repo / f"file{i}.py").write_text(f"content {i}\n")
             result = _invoke(
                 ["--json", "save", "--execute", "-m", f"save {i}",
-                 "--files", f"file{i}.py"],
+                 f"file{i}.py"],
                 tmp_git_repo,
             )
             assert result.exit_code == 0

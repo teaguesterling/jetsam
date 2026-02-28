@@ -10,23 +10,27 @@ from jetsam.core.state import build_state
 
 
 @click.command()
+@click.argument("files", nargs=-1)
 @click.option("-m", "--message", default=None, help="Commit message")
 @click.option("--include", default=None, help="Glob pattern for files to include")
 @click.option("--exclude", default=None, help="Glob pattern for files to exclude")
-@click.option("--files", multiple=True, help="Explicit files to stage")
 @click.option("--dry-run", is_flag=True, help="Show plan without executing")
 @click.option("--execute", "auto_execute", is_flag=True, help="Execute without prompting")
 @click.pass_context
 def save(
     ctx: click.Context,
+    files: tuple[str, ...],
     message: str | None,
     include: str | None,
     exclude: str | None,
-    files: tuple[str, ...],
     dry_run: bool,
     auto_execute: bool,
 ) -> None:
-    """Stage and commit with smart defaults."""
+    """Stage and commit with smart defaults.
+
+    FILES are optional explicit paths to stage. Without them, stages
+    modified tracked files (or files matching --include).
+    """
     state = build_state()
     plan_id = generate_plan_id()
 

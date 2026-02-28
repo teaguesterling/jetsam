@@ -4,12 +4,23 @@ import click
 
 from jetsam import __version__
 
+# Short aliases for workflow verbs
+ALIASES: dict[str, str] = {
+    "s": "status",
+    "v": "save",     # 'v' for saVe (s taken by status)
+    "y": "sync",
+    "l": "log",
+    "d": "diff",
+}
+
 
 class JetsamGroup(click.Group):
     """Custom group that passes unknown commands through to git."""
 
     def get_command(self, ctx: click.Context, cmd_name: str) -> click.Command | None:
-        rv = super().get_command(ctx, cmd_name)
+        # Check aliases first
+        canonical = ALIASES.get(cmd_name, cmd_name)
+        rv = super().get_command(ctx, canonical)
         if rv is not None:
             return rv
         return None
@@ -22,13 +33,29 @@ class JetsamGroup(click.Group):
             if cmd is not None:
                 return cmd_name, cmd, rest
         except click.UsageError:
-            # Unknown command — fall through to passthrough
             cmd_name = args[0] if args else None
             rest = args[1:] if args else []
+
+        # Check alias before falling to passthrough
+        if cmd_name and cmd_name in ALIASES:
+            canonical = ALIASES[cmd_name]
+            resolved = super().get_command(ctx, canonical)
+            if resolved is not None:
+                return canonical, resolved, rest
 
         from jetsam.cli.passthrough import make_passthrough_command
 
         return cmd_name, make_passthrough_command(cmd_name), rest
+
+    def format_commands(
+        self, ctx: click.Context, formatter: click.HelpFormatter
+    ) -> None:
+        """Override to show aliases in help."""
+        super().format_commands(ctx, formatter)
+        alias_lines = [(f"{short}", f"alias for {full}") for short, full in ALIASES.items()]
+        if alias_lines:
+            with formatter.section("Aliases"):
+                formatter.write_dl(alias_lines)
 
 
 @click.group(cls=JetsamGroup)

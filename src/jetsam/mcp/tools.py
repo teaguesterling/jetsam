@@ -9,13 +9,21 @@ from mcp.server.fastmcp import FastMCP
 
 from jetsam.core.executor import execute_plan
 from jetsam.core.output import JetsamError
-from jetsam.core.planner import plan_save, plan_ship, plan_sync
+from jetsam.core.planner import plan_save, plan_ship, plan_switch, plan_sync
 from jetsam.core.plans import PlanStore, generate_plan_id, update_plan
 from jetsam.core.state import build_state
 from jetsam.git.parsers import parse_diff_numstat, parse_log
 from jetsam.git.wrapper import run_git_sync
 
 _plan_store: PlanStore | None = None
+
+
+def _get_platform(state: Any) -> Any:
+    """Resolve the platform adapter from state."""
+    if state.platform == "github":
+        from jetsam.platforms.github import GitHubPlatform
+        return GitHubPlatform(cwd=state.repo_root)
+    return None
 
 
 def _get_store() -> PlanStore:
@@ -161,6 +169,77 @@ def register_tools(mcp: FastMCP) -> None:
 
             result = run_git_sync(args)
             return {"diff": result.stdout, "ok": result.ok}
+
+    @mcp.tool()
+    def switch(branch: str, create: bool = False) -> dict[str, Any]:
+        """Switch branches with automatic stash/unstash. Returns a plan.
+
+        Args:
+            branch: Target branch to switch to.
+            create: Create the branch if it doesn't exist.
+        """
+        state = build_state()
+        pid = generate_plan_id()
+        plan = plan_switch(state, plan_id=pid, branch=branch, create=create)
+        _get_store().save(plan)
+        return plan.to_dict()
+
+    @mcp.tool()
+    def pr_view(branch: str | None = None) -> dict[str, Any]:
+        """Get PR details for a branch.
+
+        Args:
+            branch: Branch to check (default: current branch).
+        """
+        state = build_state()
+        actual_branch = branch or state.branch
+        platform = _get_platform(state)
+        if platform is None:
+            return {"error": "no_platform", "message": "No platform configured"}
+        pr = platform.pr_for_branch(actual_branch)
+        if pr is None:
+            return {"pr": None, "branch": actual_branch}
+        return asdict(pr)
+
+    @mcp.tool()
+    def pr_list(
+        state: str = "open",
+        author: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """List pull requests.
+
+        Args:
+            state: Filter by state: open, closed, merged, all.
+            author: Filter by author username.
+        """
+        repo_state = build_state()
+        platform = _get_platform(repo_state)
+        if platform is None:
+            return [{"error": "no_platform"}]
+        prs = platform.pr_list(state=state, author=author)
+        return [asdict(p) for p in prs]
+
+    @mcp.tool()
+    def checks(pr_number: int | None = None) -> list[dict[str, Any]]:
+        """CI check status for current branch or a specific PR.
+
+        Args:
+            pr_number: PR number (default: PR for current branch).
+        """
+        repo_state = build_state()
+        platform = _get_platform(repo_state)
+        if platform is None:
+            return [{"error": "no_platform"}]
+
+        actual_pr = pr_number
+        if actual_pr is None:
+            pr = platform.pr_for_branch(repo_state.branch)
+            if pr is None:
+                return [{"error": "no_pr", "branch": repo_state.branch}]
+            actual_pr = pr.number
+
+        results = platform.pr_checks(actual_pr)
+        return [asdict(c) for c in results]
 
     @mcp.tool()
     def show_plan(id: str) -> dict[str, Any]:

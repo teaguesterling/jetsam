@@ -257,6 +257,36 @@ def plan_ship(
     )
 
 
+def plan_switch(
+    state: RepoState,
+    plan_id: str,
+    branch: str,
+    create: bool = False,
+) -> Plan:
+    """Generate a plan for the 'switch' verb (stash-aware branch switch)."""
+    steps: list[PlanStep] = []
+    warnings: list[str] = []
+
+    if state.dirty:
+        msg = f"jetsam switch from {state.branch}"
+        steps.append(PlanStep(action="stash", params={"message": msg}))
+
+    steps.append(PlanStep(action="checkout", params={"branch": branch, "create": create}))
+
+    if state.dirty:
+        steps.append(PlanStep(action="stash_pop"))
+        warnings.append("Dirty changes will be stashed and restored on the target branch")
+
+    return Plan(
+        plan_id=plan_id,
+        verb="switch",
+        steps=steps,
+        state_hash=state.compute_hash(),
+        warnings=warnings,
+        params={"branch": branch, "create": create},
+    )
+
+
 def _resolve_files(
     state: RepoState,
     include: str | None = None,

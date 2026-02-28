@@ -11,6 +11,10 @@ ALIASES: dict[str, str] = {
     "y": "sync",
     "l": "log",
     "d": "diff",
+    "h": "ship",
+    "w": "switch",
+    "p": "pr",
+    "c": "checks",
 }
 
 
@@ -69,15 +73,25 @@ def cli(ctx: click.Context, json_output: bool) -> None:
 
 
 # Register all verb commands
+from jetsam.cli.verbs.checks import checks  # noqa: E402
 from jetsam.cli.verbs.diff import diff  # noqa: E402
+from jetsam.cli.verbs.init import init  # noqa: E402
 from jetsam.cli.verbs.log import log  # noqa: E402
+from jetsam.cli.verbs.pr import pr  # noqa: E402
 from jetsam.cli.verbs.save import save  # noqa: E402
+from jetsam.cli.verbs.ship import ship  # noqa: E402
 from jetsam.cli.verbs.status import status  # noqa: E402
+from jetsam.cli.verbs.switch import switch  # noqa: E402
 from jetsam.cli.verbs.sync import sync  # noqa: E402
 
 cli.add_command(status)
 cli.add_command(save)
 cli.add_command(sync)
+cli.add_command(ship)
+cli.add_command(pr)
+cli.add_command(checks)
+cli.add_command(switch)
+cli.add_command(init)
 cli.add_command(log)
 cli.add_command(diff)
 

@@ -216,6 +216,83 @@ def _exec_stash_pop(step: PlanStep, cwd: str | None) -> StepResult:
     return StepResult(step="stash_pop", ok=False, error=result.stderr.strip())
 
 
+def _get_platform(cwd: str | None) -> Any:
+    """Lazily resolve the platform adapter."""
+    from jetsam.core.state import build_state
+    from jetsam.platforms.github import GitHubPlatform
+
+    state = build_state(cwd=cwd)
+    if state.platform == "github":
+        return GitHubPlatform(cwd=cwd)
+    # GitLab support is Phase 3
+    return None
+
+
+def _exec_pr_create(step: PlanStep, cwd: str | None) -> StepResult:
+    platform = _get_platform(cwd)
+    if platform is None:
+        return StepResult(step="pr_create", ok=False, error="No platform configured")
+
+    title = step.params.get("title", "")
+    base = step.params.get("base", "main")
+    body = step.params.get("body", "")
+    draft = step.params.get("draft", False)
+
+    try:
+        pr = platform.pr_create(title=title, body=body, base=base, draft=draft)
+        return StepResult(
+            step="pr_create",
+            ok=True,
+            details={"number": pr.number, "url": pr.url, "title": pr.title},
+        )
+    except Exception as e:
+        return StepResult(step="pr_create", ok=False, error=str(e))
+
+
+def _exec_pr_update(step: PlanStep, cwd: str | None) -> StepResult:
+    # PR update is a no-op for now — pushing to the branch updates the PR
+    number = step.params.get("number", 0)
+    return StepResult(
+        step="pr_update", ok=True, details={"number": number, "note": "PR updated via push"},
+    )
+
+
+def _exec_pr_merge(step: PlanStep, cwd: str | None) -> StepResult:
+    platform = _get_platform(cwd)
+    if platform is None:
+        return StepResult(step="pr_merge", ok=False, error="No platform configured")
+
+    strategy = step.params.get("strategy", "squash")
+    # Need to find the PR number — get it from the current branch
+    from jetsam.core.state import build_state
+
+    state = build_state(cwd=cwd)
+    pr = platform.pr_for_branch(state.branch)
+    if pr is None:
+        return StepResult(step="pr_merge", ok=False, error="No PR found for current branch")
+
+    ok = platform.pr_merge(pr.number, strategy=strategy)
+    if ok:
+        return StepResult(
+            step="pr_merge", ok=True, details={"number": pr.number, "strategy": strategy},
+        )
+    return StepResult(step="pr_merge", ok=False, error="Merge failed")
+
+
+def _exec_checkout(step: PlanStep, cwd: str | None) -> StepResult:
+    branch = step.params.get("branch", "")
+    create = step.params.get("create", False)
+    args = ["checkout"]
+    if create:
+        args.append("-b")
+    args.append(branch)
+
+    result = run_git_sync(args, cwd=cwd)
+    if result.ok:
+        return StepResult(step="checkout", ok=True, details={"branch": branch})
+    return StepResult(step="checkout", ok=False, error=result.stderr.strip())
+
+
 _STEP_EXECUTORS = {
     "stage": _exec_stage,
     "commit": _exec_commit,
@@ -225,4 +302,8 @@ _STEP_EXECUTORS = {
     "merge": _exec_merge,
     "stash": _exec_stash,
     "stash_pop": _exec_stash_pop,
+    "pr_create": _exec_pr_create,
+    "pr_update": _exec_pr_update,
+    "pr_merge": _exec_pr_merge,
+    "checkout": _exec_checkout,
 }

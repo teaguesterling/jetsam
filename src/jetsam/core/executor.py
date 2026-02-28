@@ -219,13 +219,10 @@ def _exec_stash_pop(step: PlanStep, cwd: str | None) -> StepResult:
 def _get_platform(cwd: str | None) -> Any:
     """Lazily resolve the platform adapter."""
     from jetsam.core.state import build_state
-    from jetsam.platforms.github import GitHubPlatform
+    from jetsam.platforms import get_platform
 
     state = build_state(cwd=cwd)
-    if state.platform == "github":
-        return GitHubPlatform(cwd=cwd)
-    # GitLab support is Phase 3
-    return None
+    return get_platform(state.platform, cwd=cwd)
 
 
 def _exec_pr_create(step: PlanStep, cwd: str | None) -> StepResult:
@@ -263,18 +260,23 @@ def _exec_pr_merge(step: PlanStep, cwd: str | None) -> StepResult:
         return StepResult(step="pr_merge", ok=False, error="No platform configured")
 
     strategy = step.params.get("strategy", "squash")
-    # Need to find the PR number — get it from the current branch
-    from jetsam.core.state import build_state
+    delete_branch = step.params.get("delete_branch", True)
+    pr_number = step.params.get("number")
 
-    state = build_state(cwd=cwd)
-    pr = platform.pr_for_branch(state.branch)
-    if pr is None:
-        return StepResult(step="pr_merge", ok=False, error="No PR found for current branch")
+    if pr_number is None:
+        # Fall back to looking up by current branch
+        from jetsam.core.state import build_state
 
-    ok = platform.pr_merge(pr.number, strategy=strategy)
+        state = build_state(cwd=cwd)
+        pr = platform.pr_for_branch(state.branch)
+        if pr is None:
+            return StepResult(step="pr_merge", ok=False, error="No PR found for current branch")
+        pr_number = pr.number
+
+    ok = platform.pr_merge(pr_number, strategy=strategy, delete_branch=delete_branch)
     if ok:
         return StepResult(
-            step="pr_merge", ok=True, details={"number": pr.number, "strategy": strategy},
+            step="pr_merge", ok=True, details={"number": pr_number, "strategy": strategy},
         )
     return StepResult(step="pr_merge", ok=False, error="Merge failed")
 
@@ -282,15 +284,106 @@ def _exec_pr_merge(step: PlanStep, cwd: str | None) -> StepResult:
 def _exec_checkout(step: PlanStep, cwd: str | None) -> StepResult:
     branch = step.params.get("branch", "")
     create = step.params.get("create", False)
+    start_point = step.params.get("start_point")
     args = ["checkout"]
     if create:
         args.append("-b")
     args.append(branch)
+    if start_point and create:
+        args.append(start_point)
 
     result = run_git_sync(args, cwd=cwd)
     if result.ok:
         return StepResult(step="checkout", ok=True, details={"branch": branch})
     return StepResult(step="checkout", ok=False, error=result.stderr.strip())
+
+
+def _exec_worktree_add(step: PlanStep, cwd: str | None) -> StepResult:
+    branch = step.params.get("branch", "")
+    base = step.params.get("base", "HEAD")
+
+    # Determine worktree path — use .worktrees/ directory beside repo root
+    from jetsam.core.state import build_state
+
+    state = build_state(cwd=cwd)
+    repo_root = state.repo_root or "."
+    import os
+
+    wt_dir = os.path.join(repo_root, ".worktrees")
+    wt_path = os.path.join(wt_dir, branch)
+
+    args = ["worktree", "add", "-b", branch, wt_path, base]
+    result = run_git_sync(args, cwd=cwd)
+    if result.ok:
+        return StepResult(
+            step="worktree_add", ok=True,
+            details={"branch": branch, "path": wt_path},
+        )
+    return StepResult(step="worktree_add", ok=False, error=result.stderr.strip())
+
+
+def _exec_worktree_remove(step: PlanStep, cwd: str | None) -> StepResult:
+    path = step.params.get("path", "")
+    force = step.params.get("force", False)
+
+    args = ["worktree", "remove", path]
+    if force:
+        args.append("--force")
+    result = run_git_sync(args, cwd=cwd)
+    if result.ok:
+        return StepResult(step="worktree_remove", ok=True, details={"path": path})
+    return StepResult(step="worktree_remove", ok=False, error=result.stderr.strip())
+
+
+def _exec_branch_delete(step: PlanStep, cwd: str | None) -> StepResult:
+    branch = step.params.get("branch", "")
+    force = step.params.get("force", False)
+
+    flag = "-D" if force else "-d"
+    result = run_git_sync(["branch", flag, branch], cwd=cwd)
+    if result.ok:
+        return StepResult(step="branch_delete", ok=True, details={"branch": branch})
+    return StepResult(step="branch_delete", ok=False, error=result.stderr.strip())
+
+
+def _exec_remote_prune(step: PlanStep, cwd: str | None) -> StepResult:
+    remote = step.params.get("remote", "origin")
+    result = run_git_sync(["remote", "prune", remote], cwd=cwd)
+    if result.ok:
+        return StepResult(step="remote_prune", ok=True, details={"remote": remote})
+    return StepResult(step="remote_prune", ok=False, error=result.stderr.strip())
+
+
+def _exec_prune_merged_branches(step: PlanStep, cwd: str | None) -> StepResult:
+    """Delete local branches whose upstream tracking branch is gone."""
+    # List branches with gone upstream
+    result = run_git_sync(
+        ["branch", "-vv", "--format", "%(refname:short) %(upstream:track)"],
+        cwd=cwd,
+    )
+    if not result.ok:
+        return StepResult(step="prune_merged_branches", ok=False, error=result.stderr.strip())
+
+    pruned: list[str] = []
+    for line in result.stdout.strip().splitlines():
+        parts = line.strip().split(" ", 1)
+        if len(parts) == 2 and "[gone]" in parts[1]:
+            branch_name = parts[0]
+            del_result = run_git_sync(["branch", "-d", branch_name], cwd=cwd)
+            if del_result.ok:
+                pruned.append(branch_name)
+
+    return StepResult(
+        step="prune_merged_branches", ok=True,
+        details={"pruned": pruned, "count": len(pruned)},
+    )
+
+
+def _exec_worktree_prune(step: PlanStep, cwd: str | None) -> StepResult:
+    result = run_git_sync(["worktree", "prune"], cwd=cwd)
+    if result.ok:
+        return StepResult(step="worktree_prune", ok=True)
+    return StepResult(step="worktree_prune", ok=False, error=result.stderr.strip())
 
 
 _STEP_EXECUTORS = {
@@ -306,4 +399,10 @@ _STEP_EXECUTORS = {
     "pr_update": _exec_pr_update,
     "pr_merge": _exec_pr_merge,
     "checkout": _exec_checkout,
+    "worktree_add": _exec_worktree_add,
+    "worktree_remove": _exec_worktree_remove,
+    "branch_delete": _exec_branch_delete,
+    "remote_prune": _exec_remote_prune,
+    "prune_merged_branches": _exec_prune_merged_branches,
+    "worktree_prune": _exec_worktree_prune,
 }

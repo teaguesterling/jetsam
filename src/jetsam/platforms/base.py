@@ -33,8 +33,26 @@ class CheckResult:
     url: str = ""
 
 
+@dataclass
+class IssueDetails:
+    """Issue details."""
+
+    number: int
+    title: str
+    state: str  # "open", "closed"
+    body: str = ""
+    url: str = ""
+    labels: list[str] = field(default_factory=list)
+    assignees: list[str] = field(default_factory=list)
+
+
 class Platform(ABC):
     """Abstract interface for GitHub/GitLab operations."""
+
+    @abstractmethod
+    def is_available(self) -> bool:
+        """Check if the platform CLI is installed and authenticated."""
+        ...
 
     @abstractmethod
     def pr_for_branch(self, branch: str) -> PRDetails | None:
@@ -74,4 +92,18 @@ class Platform(ABC):
         delete_branch: bool = True,
     ) -> bool:
         """Merge a PR. Returns True on success."""
+        ...
+
+    @abstractmethod
+    def issue_list(
+        self,
+        state: str = "open",
+        labels: list[str] | None = None,
+    ) -> list[IssueDetails]:
+        """List issues."""
+        ...
+
+    @abstractmethod
+    def issue_get(self, number: int) -> IssueDetails | None:
+        """Get issue details by number."""
         ...

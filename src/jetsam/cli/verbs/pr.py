@@ -4,7 +4,8 @@ import click
 
 from jetsam.core.output import format_json
 from jetsam.core.state import build_state
-from jetsam.platforms.github import GitHubPlatform
+from jetsam.platforms import get_platform
+from jetsam.platforms.base import Platform
 
 
 @click.group(invoke_without_command=True)
@@ -120,11 +121,11 @@ def pr_list(
             click.echo(f"  #{p.number} {p.title}{draft}  [{p.state}]")
 
 
-def _get_platform(state: object) -> GitHubPlatform | None:
+def _get_platform(state: object) -> Platform | None:
     """Get the platform adapter."""
-    if getattr(state, "platform", None) == "github":
-        return GitHubPlatform(cwd=getattr(state, "repo_root", None))
-    return None
+    platform_name = getattr(state, "platform", "unknown")
+    cwd = getattr(state, "repo_root", None)
+    return get_platform(platform_name, cwd=cwd)
 
 
 def _show_pr_human(pr_info: object) -> None:

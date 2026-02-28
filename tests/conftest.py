@@ -48,3 +48,18 @@ def dirty_git_repo(tmp_git_repo: Path) -> Path:
     (tmp_git_repo / "scratch.txt").write_text("scratch\n")
 
     return tmp_git_repo
+
+
+@pytest.fixture
+def worktree_git_repo(tmp_git_repo: Path) -> Path:
+    """Create a git repo with a secondary worktree."""
+    env = {**os.environ, "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@test.com",
+           "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "test@test.com"}
+
+    wt_path = tmp_git_repo / ".worktrees" / "feature"
+    subprocess.run(
+        ["git", "worktree", "add", "-b", "feature", str(wt_path)],
+        cwd=tmp_git_repo, check=True, env=env, capture_output=True,
+    )
+
+    return tmp_git_repo

@@ -296,6 +296,63 @@ def parse_remote_url(url: str) -> tuple[str, str]:
     return "unknown", url
 
 
+@dataclass
+class WorktreeEntry:
+    """A git worktree entry."""
+
+    path: str
+    head: str
+    branch: str  # branch name or "(detached)"
+    is_bare: bool = False
+    prunable: bool = False
+
+
+def parse_worktree_list(output: str) -> list[WorktreeEntry]:
+    """Parse git worktree list --porcelain output."""
+    entries: list[WorktreeEntry] = []
+    current: dict[str, str] = {}
+
+    for line in output.splitlines():
+        if not line:
+            # Blank line separates entries
+            if current:
+                entries.append(_build_worktree_entry(current))
+                current = {}
+        elif line.startswith("worktree "):
+            current["path"] = line[len("worktree "):]
+        elif line.startswith("HEAD "):
+            current["head"] = line[len("HEAD "):]
+        elif line.startswith("branch "):
+            # refs/heads/feature -> feature
+            ref = line[len("branch "):]
+            current["branch"] = ref.removeprefix("refs/heads/")
+        elif line == "bare":
+            current["bare"] = "true"
+        elif line == "detached":
+            current["detached"] = "true"
+        elif line == "prunable":
+            current["prunable"] = "true"
+
+    # Last entry (no trailing blank line)
+    if current:
+        entries.append(_build_worktree_entry(current))
+
+    return entries
+
+
+def _build_worktree_entry(data: dict[str, str]) -> WorktreeEntry:
+    branch = data.get("branch", "")
+    if data.get("detached"):
+        branch = "(detached)"
+    return WorktreeEntry(
+        path=data.get("path", ""),
+        head=data.get("head", ""),
+        branch=branch,
+        is_bare=data.get("bare") == "true",
+        prunable=data.get("prunable") == "true",
+    )
+
+
 def _host_to_platform(host: str) -> str:
     if "github" in host:
         return "github"

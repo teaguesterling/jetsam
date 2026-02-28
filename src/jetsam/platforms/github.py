@@ -6,7 +6,7 @@ import json
 import subprocess
 from typing import Any
 
-from jetsam.platforms.base import CheckResult, Platform, PRDetails
+from jetsam.platforms.base import CheckResult, IssueDetails, Platform, PRDetails
 
 
 class GitHubPlatform(Platform):
@@ -141,10 +141,68 @@ class GitHubPlatform(Platform):
         ok, _, _ = self._run_gh(args)
         return ok
 
+    def issue_list(
+        self,
+        state: str = "open",
+        labels: list[str] | None = None,
+    ) -> list[IssueDetails]:
+        """List issues."""
+        args = [
+            "issue", "list",
+            "--state", state,
+            "--json", "number,title,state,body,url,labels,assignees",
+            "--limit", "50",
+        ]
+        if labels:
+            args.extend(["--label", ",".join(labels)])
+
+        ok, data = self._run_gh_json(args)
+        if not ok:
+            return []
+
+        if isinstance(data, list):
+            return [_parse_issue(item) for item in data]
+        return []
+
+    def issue_get(self, number: int) -> IssueDetails | None:
+        """Get issue details by number."""
+        ok, data = self._run_gh_json([
+            "issue", "view", str(number),
+            "--json", "number,title,state,body,url,labels,assignees",
+        ])
+        if not ok:
+            return None
+        return _parse_issue(data)
+
     def is_available(self) -> bool:
         """Check if gh is installed and authenticated."""
         ok, _, _ = self._run_gh(["auth", "status"])
         return ok
+
+
+def _parse_issue(data: dict[str, Any]) -> IssueDetails:
+    """Parse gh JSON output into IssueDetails."""
+    labels = []
+    raw_labels = data.get("labels", [])
+    if isinstance(raw_labels, list):
+        labels = [lb.get("name", "") if isinstance(lb, dict) else str(lb) for lb in raw_labels]
+
+    assignees = []
+    raw_assignees = data.get("assignees", [])
+    if isinstance(raw_assignees, list):
+        assignees = [
+            a.get("login", "") if isinstance(a, dict) else str(a) for a in raw_assignees
+        ]
+
+    return IssueDetails(
+        number=data.get("number", 0),
+        title=data.get("title", ""),
+        state=data.get("state", "open").lower(),
+        body=data.get("body", ""),
+        url=data.get("url", ""),
+        labels=labels,
+        assignees=assignees,
+    )
 
 
 def _parse_pr(data: dict[str, Any]) -> PRDetails:

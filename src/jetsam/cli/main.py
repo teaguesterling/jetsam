@@ -15,6 +15,10 @@ ALIASES: dict[str, str] = {
     "w": "switch",
     "p": "pr",
     "c": "checks",
+    "b": "start",    # 'b' for begin
+    "f": "finish",
+    "t": "tidy",
+    "i": "issues",
 }
 
 
@@ -74,15 +78,21 @@ def cli(ctx: click.Context, json_output: bool) -> None:
 
 # Register all verb commands
 from jetsam.cli.verbs.checks import checks  # noqa: E402
+from jetsam.cli.verbs.completions import completions  # noqa: E402
 from jetsam.cli.verbs.diff import diff  # noqa: E402
+from jetsam.cli.verbs.finish import finish  # noqa: E402
 from jetsam.cli.verbs.init import init  # noqa: E402
+from jetsam.cli.verbs.issues import issues  # noqa: E402
 from jetsam.cli.verbs.log import log  # noqa: E402
 from jetsam.cli.verbs.pr import pr  # noqa: E402
+from jetsam.cli.verbs.prs import prs  # noqa: E402
 from jetsam.cli.verbs.save import save  # noqa: E402
 from jetsam.cli.verbs.ship import ship  # noqa: E402
+from jetsam.cli.verbs.start import start  # noqa: E402
 from jetsam.cli.verbs.status import status  # noqa: E402
 from jetsam.cli.verbs.switch import switch  # noqa: E402
 from jetsam.cli.verbs.sync import sync  # noqa: E402
+from jetsam.cli.verbs.tidy import tidy  # noqa: E402
 
 cli.add_command(status)
 cli.add_command(save)
@@ -94,6 +104,12 @@ cli.add_command(switch)
 cli.add_command(init)
 cli.add_command(log)
 cli.add_command(diff)
+cli.add_command(start)
+cli.add_command(finish)
+cli.add_command(tidy)
+cli.add_command(issues)
+cli.add_command(prs)
+cli.add_command(completions)
 
 
 @cli.command()

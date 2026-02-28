@@ -4,7 +4,7 @@ import click
 
 from jetsam.core.output import format_json
 from jetsam.core.state import build_state
-from jetsam.platforms.github import GitHubPlatform
+from jetsam.platforms import get_platform
 
 
 @click.command()
@@ -15,12 +15,10 @@ def checks(ctx: click.Context, pr_number: int | None) -> None:
     """Show CI check status for the current branch or a specific PR."""
     state = build_state()
 
-    platform: GitHubPlatform | None = None
-    if state.platform == "github":
-        platform = GitHubPlatform(cwd=state.repo_root)
+    platform = get_platform(state.platform, cwd=state.repo_root)
 
     if platform is None:
-        click.echo("  No platform configured (need GitHub remote)")
+        click.echo("  No platform configured (need GitHub or GitLab remote)")
         ctx.exit(1)
         return
 

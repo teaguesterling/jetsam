@@ -9,7 +9,15 @@ from mcp.server.fastmcp import FastMCP
 
 from jetsam.core.executor import execute_plan
 from jetsam.core.output import JetsamError
-from jetsam.core.planner import plan_save, plan_ship, plan_switch, plan_sync
+from jetsam.core.planner import (
+    plan_finish,
+    plan_save,
+    plan_ship,
+    plan_start,
+    plan_switch,
+    plan_sync,
+    plan_tidy,
+)
 from jetsam.core.plans import PlanStore, generate_plan_id, update_plan
 from jetsam.core.state import build_state
 from jetsam.git.parsers import parse_diff_numstat, parse_log
@@ -20,10 +28,8 @@ _plan_store: PlanStore | None = None
 
 def _get_platform(state: Any) -> Any:
     """Resolve the platform adapter from state."""
-    if state.platform == "github":
-        from jetsam.platforms.github import GitHubPlatform
-        return GitHubPlatform(cwd=state.repo_root)
-    return None
+    from jetsam.platforms import get_platform
+    return get_platform(state.platform, cwd=state.repo_root)
 
 
 def _get_store() -> PlanStore:
@@ -240,6 +246,94 @@ def register_tools(mcp: FastMCP) -> None:
 
         results = platform.pr_checks(actual_pr)
         return [asdict(c) for c in results]
+
+    @mcp.tool()
+    def start(
+        target: str,
+        worktree: bool = False,
+        base: str | None = None,
+        prefix: str = "",
+    ) -> dict[str, Any]:
+        """Start work on an issue or feature. Returns a plan to confirm().
+
+        Args:
+            target: Issue number (e.g. "42") or branch name (e.g. "fix-parser").
+            worktree: Create a worktree instead of switching branches.
+            base: Base branch (default: main/master).
+            prefix: Branch name prefix (e.g. "feature/").
+        """
+        state = build_state()
+        pid = generate_plan_id()
+
+        # Fetch issue title if target is numeric
+        issue_title = None
+        if target.isdigit():
+            platform = _get_platform(state)
+            if platform:
+                issue = platform.issue_get(int(target))
+                if issue:
+                    issue_title = issue.title
+
+        plan = plan_start(
+            state, plan_id=pid,
+            target=target, issue_title=issue_title,
+            branch_prefix=prefix, worktree=worktree, base=base,
+        )
+        _get_store().save(plan)
+        return plan.to_dict()
+
+    @mcp.tool()
+    def finish(
+        strategy: str = "squash",
+        no_delete: bool = False,
+    ) -> dict[str, Any]:
+        """Merge PR and clean up branch. Returns a plan to confirm().
+
+        Args:
+            strategy: Merge strategy: "squash", "merge", or "rebase".
+            no_delete: Keep the branch after merging.
+        """
+        state = build_state()
+        pid = generate_plan_id()
+
+        worktree_path = None
+        if state.worktree and state.worktree.active:
+            worktree_path = state.worktree.current
+
+        plan = plan_finish(
+            state, plan_id=pid,
+            strategy=strategy, no_delete=no_delete,
+            worktree_path=worktree_path,
+        )
+        _get_store().save(plan)
+        return plan.to_dict()
+
+    @mcp.tool()
+    def tidy() -> dict[str, Any]:
+        """Prune merged branches and stale refs. Returns a plan to confirm()."""
+        state = build_state()
+        pid = generate_plan_id()
+        plan = plan_tidy(state, plan_id=pid)
+        _get_store().save(plan)
+        return plan.to_dict()
+
+    @mcp.tool()
+    def issues(
+        state: str = "open",
+        labels: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """List issues from the project tracker.
+
+        Args:
+            state: Filter by state: open, closed, all.
+            labels: Filter by labels.
+        """
+        repo_state = build_state()
+        platform = _get_platform(repo_state)
+        if platform is None:
+            return [{"error": "no_platform"}]
+        issue_list = platform.issue_list(state=state, labels=labels)
+        return [asdict(i) for i in issue_list]
 
     @mcp.tool()
     def show_plan(id: str) -> dict[str, Any]:

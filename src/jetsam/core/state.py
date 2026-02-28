@@ -29,6 +29,15 @@ class PRInfo:
 
 
 @dataclass
+class WorktreeInfo:
+    """Minimal worktree info embedded in RepoState."""
+
+    active: bool  # True if inside a secondary worktree
+    root: str  # Main worktree path
+    current: str  # Current worktree path
+
+
+@dataclass
 class RepoState:
     """Complete snapshot of repository state."""
 
@@ -48,6 +57,7 @@ class RepoState:
     pr: PRInfo | None = None
     head_sha: str = ""
     repo_root: str = ""
+    worktree: WorktreeInfo | None = None
 
     # Computed fields for plan validation
     _state_hash: str = field(default="", repr=False)
@@ -121,6 +131,9 @@ def build_state(cwd: str | None = None) -> RepoState:
     root_result = run_git_sync(["rev-parse", "--show-toplevel"], cwd=cwd)
     repo_root = root_result.stdout.strip() if root_result.ok else ""
 
+    # Detect worktree state
+    worktree_info = _detect_worktree_info(cwd)
+
     state = RepoState(
         branch=status.branch.head,
         upstream=status.branch.upstream,
@@ -137,6 +150,7 @@ def build_state(cwd: str | None = None) -> RepoState:
         remote_url=remote_url,
         head_sha=head_sha,
         repo_root=repo_root,
+        worktree=worktree_info,
     )
     state._state_hash = state.compute_hash()
     return state
@@ -159,6 +173,20 @@ def _detect_default_branch(cwd: str | None = None) -> str:
 
     # Last resort
     return "main"
+
+
+def _detect_worktree_info(cwd: str | None = None) -> WorktreeInfo | None:
+    """Detect if we're in a worktree setup."""
+    from jetsam.worktree.integration import detect_worktree
+
+    wt_state = detect_worktree(cwd=cwd)
+    if wt_state is None:
+        return None
+    return WorktreeInfo(
+        active=wt_state.active,
+        root=wt_state.root,
+        current=wt_state.current,
+    )
 
 
 def _empty_status() -> StatusResult:

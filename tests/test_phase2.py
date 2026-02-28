@@ -327,8 +327,8 @@ class TestSwitchVerb:
 
 
 class TestChecksVerb:
-    @patch("jetsam.cli.verbs.checks.GitHubPlatform")
-    def test_checks_json(self, mock_platform_cls, tmp_git_repo: Path):
+    @patch("jetsam.cli.verbs.checks.get_platform")
+    def test_checks_json(self, mock_get_platform, tmp_git_repo: Path):
         """Test checks with mocked platform."""
         from jetsam.platforms.base import CheckResult
 
@@ -338,7 +338,7 @@ class TestChecksVerb:
             CheckResult(name="CI", status="pass", url="https://ci.example.com"),
             CheckResult(name="lint", status="fail", url=""),
         ]
-        mock_platform_cls.return_value = mock_platform
+        mock_get_platform.return_value = mock_platform
 
         result = _invoke(["--json", "checks"], tmp_git_repo)
         # This may fail if platform detection doesn't find github

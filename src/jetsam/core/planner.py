@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import fnmatch
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -285,6 +286,207 @@ def plan_switch(
         warnings=warnings,
         params={"branch": branch, "create": create},
     )
+
+
+def plan_start(
+    state: RepoState,
+    plan_id: str,
+    target: str,
+    issue_title: str | None = None,
+    branch_prefix: str = "",
+    worktree: bool = False,
+    base: str | None = None,
+) -> Plan:
+    """Generate a plan for the 'start' verb (begin work on issue/feature).
+
+    Args:
+        target: Issue number (e.g. "42") or branch name (e.g. "fix-parser").
+        issue_title: Title of the issue (for slug generation if target is numeric).
+        branch_prefix: Optional prefix for branch names (e.g. "feature/").
+        worktree: If True, create a worktree instead of switching branches.
+        base: Base branch to create from (default: default_branch).
+    """
+    steps: list[PlanStep] = []
+    warnings: list[str] = []
+    actual_base = base or state.default_branch
+
+    # Determine branch name
+    if target.isdigit():
+        issue_num = int(target)
+        if issue_title:
+            slug = _slugify(issue_title)
+            branch_name = f"{issue_num}-{slug}"
+        else:
+            branch_name = f"issue-{issue_num}"
+    else:
+        branch_name = target
+
+    # Apply branch prefix
+    if branch_prefix and not branch_name.startswith(branch_prefix):
+        branch_name = f"{branch_prefix}{branch_name}"
+
+    if worktree:
+        steps.append(PlanStep(
+            action="worktree_add",
+            params={"branch": branch_name, "base": actual_base},
+        ))
+    else:
+        if state.dirty:
+            warnings.append("Dirty changes will be stashed before switching")
+            steps.append(PlanStep(
+                action="stash",
+                params={"message": f"jetsam start: stash before {branch_name}"},
+            ))
+
+        steps.append(PlanStep(
+            action="checkout",
+            params={"branch": branch_name, "create": True, "start_point": actual_base},
+        ))
+
+        if state.dirty:
+            steps.append(PlanStep(action="stash_pop"))
+
+    return Plan(
+        plan_id=plan_id,
+        verb="start",
+        steps=steps,
+        state_hash=state.compute_hash(),
+        warnings=warnings,
+        params={
+            "target": target,
+            "branch": branch_name,
+            "base": actual_base,
+            "worktree": worktree,
+        },
+    )
+
+
+def plan_finish(
+    state: RepoState,
+    plan_id: str,
+    strategy: str = "squash",
+    no_delete: bool = False,
+    worktree_path: str | None = None,
+) -> Plan:
+    """Generate a plan for the 'finish' verb (merge PR, clean up branch).
+
+    Args:
+        strategy: Merge strategy ("squash", "merge", "rebase").
+        no_delete: Skip branch deletion after merge.
+        worktree_path: If in a worktree, path to remove.
+    """
+    steps: list[PlanStep] = []
+    warnings: list[str] = []
+
+    if state.branch == state.default_branch:
+        warnings.append("Already on default branch — nothing to finish")
+        return Plan(
+            plan_id=plan_id,
+            verb="finish",
+            steps=[],
+            state_hash=state.compute_hash(),
+            warnings=warnings,
+            params={"strategy": strategy, "no_delete": no_delete},
+        )
+
+    if state.dirty:
+        warnings.append("Working tree has uncommitted changes")
+
+    # Merge the PR if one exists
+    if state.pr:
+        steps.append(PlanStep(
+            action="pr_merge",
+            params={
+                "number": state.pr.number,
+                "strategy": strategy,
+                "delete_branch": not no_delete,
+            },
+        ))
+
+    # Switch back to default branch
+    if worktree_path:
+        steps.append(PlanStep(
+            action="worktree_remove",
+            params={"path": worktree_path},
+        ))
+    else:
+        steps.append(PlanStep(
+            action="checkout",
+            params={"branch": state.default_branch},
+        ))
+
+    # Fetch to update refs after merge
+    steps.append(PlanStep(action="fetch", params={"remote": "origin"}))
+
+    # Delete branch locally (if not already deleted by merge)
+    if not no_delete and not (state.pr and not worktree_path):
+        # Only add explicit delete if pr_merge didn't handle it
+        steps.append(PlanStep(
+            action="branch_delete",
+            params={"branch": state.branch},
+        ))
+
+    return Plan(
+        plan_id=plan_id,
+        verb="finish",
+        steps=steps,
+        state_hash=state.compute_hash(),
+        warnings=warnings,
+        params={
+            "branch": state.branch,
+            "strategy": strategy,
+            "no_delete": no_delete,
+        },
+    )
+
+
+def plan_tidy(
+    state: RepoState,
+    plan_id: str,
+) -> Plan:
+    """Generate a plan for the 'tidy' verb (prune merged branches + remotes)."""
+    steps: list[PlanStep] = []
+    warnings: list[str] = []
+
+    # Prune stale remote-tracking refs
+    steps.append(PlanStep(
+        action="remote_prune",
+        params={"remote": "origin"},
+    ))
+
+    # Prune local branches whose upstream is gone
+    steps.append(PlanStep(action="prune_merged_branches"))
+
+    # Prune stale worktree refs
+    if state.worktree is not None:
+        steps.append(PlanStep(action="worktree_prune"))
+
+    return Plan(
+        plan_id=plan_id,
+        verb="tidy",
+        steps=steps,
+        state_hash=state.compute_hash(),
+        warnings=warnings,
+        params={},
+    )
+
+
+def _slugify(text: str, max_length: int = 50) -> str:
+    """Convert text to a branch-name-safe slug.
+
+    Examples:
+        "Fix parser bug" -> "fix-parser-bug"
+        "Add  feature!! (important)" -> "add-feature-important"
+    """
+    text = text.lower()
+    text = re.sub(r"[^a-z0-9\s-]", "", text)
+    text = re.sub(r"[\s_]+", "-", text)
+    text = re.sub(r"-+", "-", text)
+    text = text.strip("-")
+    if len(text) > max_length:
+        # Truncate at word boundary
+        text = text[:max_length].rsplit("-", 1)[0]
+    return text
 
 
 def _resolve_files(

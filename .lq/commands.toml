@@ -1,0 +1,25 @@
+[commands.test]
+cmd = ".venv/bin/python -m pytest tests/ -v"
+description = "Run pytest test suite"
+format = "pytest"
+
+[commands.lint]
+cmd = ".venv/bin/python -m ruff check src/ tests/"
+description = "Run ruff linter"
+format = "generic_lint"
+
+[commands.typecheck]
+cmd = ".venv/bin/python -m mypy src/jetsam/"
+description = "Run mypy type checker"
+format = "mypy_text"
+
+[commands.lint-fix]
+cmd = ".venv/bin/python -m ruff check --fix src/ tests/"
+description = "Run ruff linter with auto-fix"
+format = "generic_lint"
+
+[commands.serve]
+cmd = ".venv/bin/python -m jetsam.mcp.server"
+description = "Run jetsam MCP server (stdio)"
+format = "auto"
+capture = false

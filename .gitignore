@@ -1,0 +1,32 @@
+# blq
+.lq/*
+!.lq/hooks/
+!.lq/config.toml
+!.lq/commands.toml
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+*.egg
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# jetsam runtime
+.jetsam/plans/
+
+# mypy
+.mypy_cache/
+
+# pytest
+.pytest_cache/
+
+# ruff
+.ruff_cache/

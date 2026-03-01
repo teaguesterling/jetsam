@@ -17,7 +17,7 @@ if command -v blq &> /dev/null && [ -d ".lq" ]; then
     fi
 else
     # Fallback: run command directly
-    CMD='.venv/bin/python -m ruff check src/ tests/'
+    CMD='python -m ruff check src/ tests/'
     if [ $# -gt 0 ]; then
         CMD="$CMD $*"
     fi

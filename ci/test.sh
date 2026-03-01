@@ -17,7 +17,7 @@ if command -v blq &> /dev/null && [ -d ".lq" ]; then
     fi
 else
     # Fallback: run command directly
-    CMD='.venv/bin/python -m pytest tests/ -v'
+    CMD='python -m pytest tests/ -v'
     if [ $# -gt 0 ]; then
         CMD="$CMD $*"
     fi

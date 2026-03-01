@@ -17,7 +17,7 @@ if command -v blq &> /dev/null && [ -d ".lq" ]; then
     fi
 else
     # Fallback: run command directly
-    CMD='.venv/bin/python -m mypy src/jetsam/'
+    CMD='python -m mypy src/jetsam/'
     if [ $# -gt 0 ]; then
         CMD="$CMD $*"
     fi

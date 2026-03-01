@@ -20,6 +20,11 @@ def tmp_git_repo(tmp_path: Path) -> Path:
 
     subprocess.run(["git", "init", "-b", "main"], cwd=repo, check=True, env=env,
                    capture_output=True)
+    # Configure git identity in repo so executor commits work (e.g. in CI)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True,
+                   capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=repo, check=True,
+                   capture_output=True)
     # Create initial file and commit
     (repo / "README.md").write_text("# Test\n")
     subprocess.run(["git", "add", "README.md"], cwd=repo, check=True, env=env,

@@ -9,11 +9,31 @@ description = "Git workflow accelerator for humans and agents"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
+authors = [
+    { name = "Teague Sterling" },
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Version Control :: Git",
+    "Intended Audience :: Developers",
+]
 dependencies = [
     "click>=8.1",
     "mcp>=1.0",
     "pyyaml>=6.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/teague/jetsam"
+Repository = "https://github.com/teague/jetsam"
+Issues = "https://github.com/teague/jetsam/issues"
+Changelog = "https://github.com/teague/jetsam/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [

@@ -70,6 +70,28 @@ class ExecutionResult:
         return "No persistent changes were made."
 
 
+def _suggest_recovery(step_name: str, error_text: str) -> str | None:
+    """Map common step failures to recovery suggestions."""
+    error_lower = error_text.lower()
+
+    if step_name == "push" and "rejected" in error_lower:
+        return "sync"
+    if step_name == "rebase" and "conflict" in error_lower:
+        return "Resolve conflicts, then: git rebase --continue"
+    if step_name == "pr_create" and "no upstream" in error_lower:
+        return "push -u origin <branch> first"
+    if step_name == "checkout" and ("dirty" in error_lower or "overwritten" in error_lower):
+        return "save or stash changes first"
+    if step_name == "push" and ("non-fast-forward" in error_lower or "fetch first" in error_lower):
+        return "sync"
+    if step_name == "merge" and "conflict" in error_lower:
+        return "Resolve conflicts, then: git merge --continue"
+    if step_name in ("tag_create",) and "already exists" in error_lower:
+        return "Delete existing tag first: git tag -d <tag>"
+
+    return None
+
+
 def execute_plan(plan: Plan, cwd: str | None = None) -> ExecutionResult:
     """Execute a plan step by step.
 
@@ -91,6 +113,7 @@ def execute_plan(plan: Plan, cwd: str | None = None) -> ExecutionResult:
                         "message": "Repository state changed since plan was created.",
                         "expected_hash": plan.state_hash,
                         "current_hash": current_hash,
+                        "suggested_action": "Re-run the command to create a fresh plan",
                     },
                 )
             ],
@@ -123,7 +146,15 @@ def _execute_step(step: PlanStep, cwd: str | None = None) -> StepResult:
             ok=False,
             error=f"Unknown step action: {step.action}",
         )
-    return executor(step, cwd)
+    result = executor(step, cwd)
+
+    # Add recovery suggestion for failed steps
+    if not result.ok and result.error:
+        suggestion = _suggest_recovery(result.step, result.error)
+        if suggestion:
+            result.details["suggested_action"] = suggestion
+
+    return result
 
 
 def _exec_stage(step: PlanStep, cwd: str | None) -> StepResult:
@@ -315,9 +346,13 @@ def _exec_worktree_add(step: PlanStep, cwd: str | None) -> StepResult:
     args = ["worktree", "add", "-b", branch, wt_path, base]
     result = run_git_sync(args, cwd=cwd)
     if result.ok:
+        # Set up shared paths (e.g. .env, node_modules)
+        from jetsam.worktree.integration import setup_shared_paths
+
+        shared = setup_shared_paths(repo_root, wt_path)
         return StepResult(
             step="worktree_add", ok=True,
-            details={"branch": branch, "path": wt_path},
+            details={"branch": branch, "path": wt_path, "shared_paths": shared},
         )
     return StepResult(step="worktree_add", ok=False, error=result.stderr.strip())
 
@@ -386,6 +421,44 @@ def _exec_worktree_prune(step: PlanStep, cwd: str | None) -> StepResult:
     return StepResult(step="worktree_prune", ok=False, error=result.stderr.strip())
 
 
+def _exec_tag_create(step: PlanStep, cwd: str | None) -> StepResult:
+    tag = step.params.get("tag", "")
+    message = step.params.get("message", tag)
+    result = run_git_sync(["tag", "-a", tag, "-m", message], cwd=cwd)
+    if result.ok:
+        return StepResult(step="tag_create", ok=True, details={"tag": tag})
+    return StepResult(step="tag_create", ok=False, error=result.stderr.strip())
+
+
+def _exec_push_tag(step: PlanStep, cwd: str | None) -> StepResult:
+    tag = step.params.get("tag", "")
+    remote = step.params.get("remote", "origin")
+    result = run_git_sync(["push", remote, tag], cwd=cwd)
+    if result.ok:
+        return StepResult(step="push_tag", ok=True, details={"tag": tag, "remote": remote})
+    return StepResult(step="push_tag", ok=False, error=result.stderr.strip())
+
+
+def _exec_release_create(step: PlanStep, cwd: str | None) -> StepResult:
+    platform = _get_platform(cwd)
+    if platform is None:
+        return StepResult(step="release_create", ok=False, error="No platform configured")
+
+    tag = step.params.get("tag", "")
+    title = step.params.get("title", tag)
+    notes = step.params.get("notes", "")
+    draft = step.params.get("draft", False)
+
+    try:
+        result = platform.release_create(tag=tag, title=title, notes=notes, draft=draft)
+        return StepResult(
+            step="release_create", ok=True,
+            details={"tag": result["tag"], "url": result.get("url", "")},
+        )
+    except Exception as e:
+        return StepResult(step="release_create", ok=False, error=str(e))
+
+
 _STEP_EXECUTORS = {
     "stage": _exec_stage,
     "commit": _exec_commit,
@@ -405,4 +478,7 @@ _STEP_EXECUTORS = {
     "remote_prune": _exec_remote_prune,
     "prune_merged_branches": _exec_prune_merged_branches,
     "worktree_prune": _exec_worktree_prune,
+    "tag_create": _exec_tag_create,
+    "push_tag": _exec_push_tag,
+    "release_create": _exec_release_create,
 }

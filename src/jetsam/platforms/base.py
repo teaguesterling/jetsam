@@ -104,6 +104,17 @@ class Platform(ABC):
         ...
 
     @abstractmethod
+    def release_create(
+        self,
+        tag: str,
+        title: str,
+        notes: str = "",
+        draft: bool = False,
+    ) -> dict[str, str]:
+        """Create a release for a tag. Returns {"tag": ..., "url": ...}."""
+        ...
+
+    @abstractmethod
     def issue_get(self, number: int) -> IssueDetails | None:
         """Get issue details by number."""
         ...

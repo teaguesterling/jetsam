@@ -19,6 +19,7 @@ ALIASES: dict[str, str] = {
     "f": "finish",
     "t": "tidy",
     "i": "issues",
+    "r": "release",
 }
 
 
@@ -86,6 +87,7 @@ from jetsam.cli.verbs.issues import issues  # noqa: E402
 from jetsam.cli.verbs.log import log  # noqa: E402
 from jetsam.cli.verbs.pr import pr  # noqa: E402
 from jetsam.cli.verbs.prs import prs  # noqa: E402
+from jetsam.cli.verbs.release import release  # noqa: E402
 from jetsam.cli.verbs.save import save  # noqa: E402
 from jetsam.cli.verbs.ship import ship  # noqa: E402
 from jetsam.cli.verbs.start import start  # noqa: E402
@@ -109,6 +111,7 @@ cli.add_command(finish)
 cli.add_command(tidy)
 cli.add_command(issues)
 cli.add_command(prs)
+cli.add_command(release)
 cli.add_command(completions)
 
 

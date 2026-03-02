@@ -11,6 +11,7 @@ from jetsam.core.executor import execute_plan
 from jetsam.core.output import JetsamError
 from jetsam.core.planner import (
     plan_finish,
+    plan_release,
     plan_save,
     plan_ship,
     plan_start,
@@ -336,6 +337,30 @@ def register_tools(mcp: FastMCP) -> None:
         return [asdict(i) for i in issue_list]
 
     @mcp.tool()
+    def release(
+        tag: str,
+        title: str | None = None,
+        notes: str = "",
+        draft: bool = False,
+    ) -> dict[str, Any]:
+        """Tag, push, and create a platform release. Returns a plan to confirm().
+
+        Args:
+            tag: Tag name (e.g. "v0.1.0").
+            title: Release title (defaults to tag name).
+            notes: Release notes text.
+            draft: Create as a draft release.
+        """
+        state = build_state()
+        pid = generate_plan_id()
+        plan = plan_release(
+            state, plan_id=pid,
+            tag=tag, title=title, notes=notes, draft=draft,
+        )
+        _get_store().save(plan)
+        return plan.to_dict()
+
+    @mcp.tool()
     def show_plan(id: str) -> dict[str, Any]:
         """Show current state of a plan.
 
@@ -370,6 +395,7 @@ def register_tools(mcp: FastMCP) -> None:
             return JetsamError(
                 error="plan_not_found",
                 message=f"Plan {id} not found or expired.",
+                suggested_action="Re-run the original command.",
                 recoverable=True,
             ).to_dict()
 

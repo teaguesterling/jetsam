@@ -73,6 +73,45 @@ def detect_worktree(cwd: str | None = None) -> WorktreeState | None:
     )
 
 
+def setup_shared_paths(repo_root: str, worktree_path: str) -> list[str]:
+    """Symlink shared paths from main repo into a new worktree.
+
+    Reads `.git-worktree-shared` from repo root (one path per line),
+    and creates symlinks in the worktree pointing back to the main repo.
+
+    Returns list of paths that were symlinked.
+    """
+    import os
+
+    shared_file = os.path.join(repo_root, ".git-worktree-shared")
+    if not os.path.isfile(shared_file):
+        return []
+
+    with open(shared_file) as f:
+        paths = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+
+    linked: list[str] = []
+    for rel_path in paths:
+        source = os.path.join(repo_root, rel_path)
+        target = os.path.join(worktree_path, rel_path)
+
+        # Skip if source doesn't exist
+        if not os.path.exists(source):
+            continue
+
+        # Skip if target already exists (symlink or otherwise)
+        if os.path.exists(target) or os.path.islink(target):
+            continue
+
+        # Ensure parent directory exists
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+
+        os.symlink(source, target)
+        linked.append(rel_path)
+
+    return linked
+
+
 def list_worktrees(cwd: str | None = None) -> list[WorktreeEntry]:
     """List all worktrees."""
     result = run_git_sync(["worktree", "list", "--porcelain"], cwd=cwd)

@@ -440,6 +440,64 @@ def plan_finish(
     )
 
 
+def plan_release(
+    state: RepoState,
+    plan_id: str,
+    tag: str,
+    title: str | None = None,
+    notes: str = "",
+    draft: bool = False,
+) -> Plan:
+    """Generate a plan for the 'release' verb (tag + push tag + create release).
+
+    Args:
+        tag: Tag name (e.g. "v0.1.0").
+        title: Release title (defaults to tag).
+        notes: Release notes text.
+        draft: Create as a draft release.
+    """
+    steps: list[PlanStep] = []
+    warnings: list[str] = []
+    actual_title = title or tag
+
+    if state.dirty:
+        warnings.append("Working tree has uncommitted changes")
+
+    if state.branch != state.default_branch:
+        warnings.append(f"Not on default branch ({state.default_branch})")
+
+    # Check if tag already exists
+    from jetsam.git.wrapper import run_git_sync
+
+    tag_check = run_git_sync(["tag", "-l", tag], cwd=state.repo_root)
+    if tag_check.ok and tag_check.stdout.strip():
+        warnings.append(f"Tag {tag} already exists")
+    else:
+        steps.append(PlanStep(
+            action="tag_create",
+            params={"tag": tag, "message": actual_title},
+        ))
+
+    steps.append(PlanStep(
+        action="push_tag",
+        params={"tag": tag, "remote": "origin"},
+    ))
+
+    steps.append(PlanStep(
+        action="release_create",
+        params={"tag": tag, "title": actual_title, "notes": notes, "draft": draft},
+    ))
+
+    return Plan(
+        plan_id=plan_id,
+        verb="release",
+        steps=steps,
+        state_hash=state.compute_hash(),
+        warnings=warnings,
+        params={"tag": tag, "title": actual_title, "notes": notes, "draft": draft},
+    )
+
+
 def plan_tidy(
     state: RepoState,
     plan_id: str,

@@ -141,6 +141,29 @@ class GitHubPlatform(Platform):
         ok, _, _ = self._run_gh(args)
         return ok
 
+    def release_create(
+        self,
+        tag: str,
+        title: str,
+        notes: str = "",
+        draft: bool = False,
+    ) -> dict[str, str]:
+        """Create a GitHub release."""
+        args = ["release", "create", tag, "--title", title]
+        if notes:
+            args.extend(["--notes", notes])
+        else:
+            args.extend(["--notes", ""])
+        if draft:
+            args.append("--draft")
+
+        ok, stdout, stderr = self._run_gh(args)
+        if not ok:
+            raise PlatformError(f"Failed to create release: {stderr.strip()}")
+
+        url = stdout.strip()
+        return {"tag": tag, "url": url}
+
     def issue_list(
         self,
         state: str = "open",

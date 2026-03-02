@@ -103,16 +103,25 @@ def init(ctx: click.Context, mcp: bool, aliases: bool) -> None:
     # Generate .mcp.json if requested
     if mcp:
         mcp_path = Path(state.repo_root) / ".mcp.json"
-        mcp_config = {
-            "mcpServers": {
-                "jetsam": {
-                    "command": "jetsam",
-                    "args": ["serve"],
-                    "type": "stdio",
-                }
-            }
+        jetsam_entry = {
+            "command": "jetsam",
+            "args": ["serve"],
+            "type": "stdio",
         }
-        mcp_path.write_text(json.dumps(mcp_config, indent=2) + "\n")
+
+        # Merge into existing file if present
+        existing: dict[str, object] = {}
+        if mcp_path.exists():
+            try:
+                existing = json.loads(mcp_path.read_text())
+            except (json.JSONDecodeError, OSError):
+                existing = {}
+
+        if "mcpServers" not in existing or not isinstance(existing["mcpServers"], dict):
+            existing["mcpServers"] = {}
+        existing["mcpServers"]["jetsam"] = jetsam_entry  # type: ignore[index]
+
+        mcp_path.write_text(json.dumps(existing, indent=2) + "\n")
         results["mcp_json"] = str(mcp_path)
 
     # Install shell aliases if requested

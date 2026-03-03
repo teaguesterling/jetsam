@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.1
+
+- Document `auto_push` and `commit_message` configuration options
+- Fix `init --mcp` to merge into existing `.mcp.json` instead of overwriting
+- Add Sphinx documentation for ReadTheDocs
+
 ## v0.1.0
 
 Initial release.

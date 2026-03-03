@@ -37,8 +37,14 @@ branch_prefix: ""
 # Delete branch after merge in finish
 delete_on_merge: true
 
+# Automatically push after save: true | false
+auto_push: false
+
 # Worktree usage: auto | always | never
 worktree: auto
+
+# Commit message strategy: heuristic | prompt | llm
+commit_message: heuristic
 ```
 
 ### Option reference
@@ -63,9 +69,17 @@ worktree: auto
 `delete_on_merge`
 : Whether `finish` deletes the branch after merging. Default: `true`.
 
+`auto_push`
+: When `true`, `save` automatically pushes after committing. Default: `false`.
+
 `worktree`
 : Worktree mode for `start`. `auto` (default) uses branches normally.
   `always` creates worktrees by default. `never` disables worktree creation.
+
+`commit_message`
+: Strategy for generating commit messages. `heuristic` (default) builds a message
+  from the staged changes. `prompt` asks interactively. `llm` delegates to an LLM.
+  *Reserved — not yet implemented.*
 
 ## Platform support
 

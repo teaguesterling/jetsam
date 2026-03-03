@@ -132,11 +132,11 @@ def init(ctx: click.Context, mcp: bool, aliases: bool) -> None:
         block = generate_alias_block_fish() if shell == "fish" else generate_alias_block_posix()
 
         # Check for existing aliases
-        existing = ""
+        existing_rc = ""
         if config_path.exists():
-            existing = config_path.read_text()
+            existing_rc = config_path.read_text()
 
-        if has_alias_marker(existing):
+        if has_alias_marker(existing_rc):
             results["aliases"] = "already installed"
             results["aliases_file"] = str(config_path)
         else:

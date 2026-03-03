@@ -30,10 +30,11 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/teague/jetsam"
-Repository = "https://github.com/teague/jetsam"
-Issues = "https://github.com/teague/jetsam/issues"
-Changelog = "https://github.com/teague/jetsam/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/teaguesterling/jetsam"
+Repository = "https://github.com/teaguesterling/jetsam"
+Issues = "https://github.com/teaguesterling/jetsam/issues"
+Changelog = "https://github.com/teaguesterling/jetsam/blob/main/CHANGELOG.md"
+Documentation = "https://jetsam.readthedocs.io"
 
 [project.optional-dependencies]
 dev = [
@@ -42,6 +43,11 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.10",
     "types-PyYAML",
+]
+docs = [
+    "sphinx>=7.0",
+    "furo>=2024.1",
+    "myst-parser>=3.0",
 ]
 
 [project.scripts]

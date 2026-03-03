@@ -30,3 +30,6 @@ build/
 
 # ruff
 .ruff_cache/
+
+# docs
+docs/_build/

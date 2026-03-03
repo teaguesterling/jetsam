@@ -10,7 +10,7 @@ Jetsam wraps common multi-step git workflows into single, plannable commands. Ev
 action generates a preview plan before executing, making it safe for interactive use
 and ideal for AI agent integration via MCP.
 
-**[Documentation](https://jetsam.readthedocs.io)** | **[PyPI](https://pypi.org/project/jetsam/)** | **[GitHub](https://github.com/teaguesterling/jetsam)**
+**[Documentation](https://jetsam-mcp.readthedocs.io)** | **[PyPI](https://pypi.org/project/jetsam-mcp/)** | **[GitHub](https://github.com/teaguesterling/jetsam)**
 
 ## Installation
 

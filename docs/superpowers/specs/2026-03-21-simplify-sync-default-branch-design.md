@@ -109,6 +109,8 @@ New test cases for `TestPlanSync`:
    staged changes → full plan with stash/fetch/merge/push/stash_pop
 5. **`test_default_branch_explicit_strategy_skips_fast_path`** — default branch, ahead=1,
    behind=0, clean tree, `strategy="merge"` → full plan with fetch/merge (fast path bypassed)
+6. **`test_default_branch_not_ahead_no_fast_path`** — default branch, ahead=0, behind=0,
+   clean tree → normal path (fetch/merge), confirms fast path requires ahead > 0
 
 Existing tests must continue to pass unchanged.
 
@@ -119,4 +121,4 @@ for this change.
 
 ## Scope
 
-~15-20 lines changed in `planner.py`. 5 new test cases in `test_planner.py`.
+~15-20 lines changed in `planner.py`. 6 new test cases in `test_planner.py`.

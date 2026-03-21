@@ -27,9 +27,11 @@ needs_stash = bool(state.staged or state.unstaged)
 ```
 
 Use `needs_stash` instead of `state.dirty` for all stash/stash_pop decisions in
-`plan_sync`. Untracked files alone no longer trigger stashing.
+`plan_sync`. This affects two locations:
+- **Line 100-102**: stash step + warning (currently guarded by `state.dirty`)
+- **Line 145-146**: stash_pop step (currently guarded by `state.dirty`)
 
-This also updates the dirty warning to only appear when `needs_stash` is true.
+Both change to use `needs_stash`. Untracked files alone no longer trigger stashing.
 
 #### 2. Fast path early return
 
@@ -38,13 +40,14 @@ When all of these conditions hold:
 - Ahead of remote (`state.ahead > 0`)
 - Not behind remote (`state.behind == 0`)
 - No stash needed (`not needs_stash`)
+- No explicit strategy requested (`strategy is None`)
 
 Generate a minimal plan containing only a `push` step and return immediately.
 No fetch, no merge, no stash.
 
 **Why skip fetch?** `git push` already rejects non-fast-forward pushes, so the
 push itself serves as a safety check. Users who want fetch+merge can pass an
-explicit strategy.
+explicit strategy, which bypasses the fast path.
 
 ### Code sketch
 
@@ -59,9 +62,9 @@ def plan_sync(state, plan_id, strategy=None):
         warnings.append("Working tree is dirty — changes will be stashed during sync")
         steps.append(PlanStep(action="stash", params={"message": "jetsam sync auto-stash"}))
 
-    # Fast path: default branch, ahead only, clean working tree
+    # Fast path: default branch, ahead only, clean working tree, no explicit strategy
     is_default = state.branch == state.default_branch
-    if is_default and state.ahead > 0 and state.behind == 0 and not needs_stash:
+    if is_default and state.ahead > 0 and state.behind == 0 and not needs_stash and strategy is None:
         steps.append(PlanStep(action="push", params={
             "branch": state.branch, "remote": "origin", "set_upstream": state.upstream is None,
         }))
@@ -69,9 +72,12 @@ def plan_sync(state, plan_id, strategy=None):
                     state_hash=state.compute_hash(), warnings=warnings,
                     params={"strategy": strategy})
 
-    # Normal path continues: fetch, merge/rebase, push, stash_pop
-    # (unchanged from current implementation)
+    # Normal path continues: fetch, merge/rebase, push
+    # (unchanged from current implementation except stash_pop guard)
     ...
+
+    if needs_stash:  # was: if state.dirty
+        steps.append(PlanStep(action="stash_pop"))
 ```
 
 ## What doesn't change
@@ -101,9 +107,16 @@ New test cases for `TestPlanSync`:
    full plan with fetch/merge, no fast path
 4. **`test_default_branch_ahead_with_staged_changes`** — default branch, ahead=1,
    staged changes → full plan with stash/fetch/merge/push/stash_pop
+5. **`test_default_branch_explicit_strategy_skips_fast_path`** — default branch, ahead=1,
+   behind=0, clean tree, `strategy="merge"` → full plan with fetch/merge (fast path bypassed)
 
 Existing tests must continue to pass unchanged.
 
+**Note:** The existing `test_default_branch_merge` test uses `upstream="origin/feature"`
+with `branch="main"`, which is an incoherent state. It still passes because the merge
+step fires unconditionally on the normal path. Cleaning up test fixtures is out of scope
+for this change.
+
 ## Scope
 
-~15 lines changed in `planner.py`. 4 new test cases in `test_planner.py`.
+~15-20 lines changed in `planner.py`. 5 new test cases in `test_planner.py`.

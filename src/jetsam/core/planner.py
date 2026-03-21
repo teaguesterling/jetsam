@@ -30,6 +30,7 @@ class Plan:
     steps: list[PlanStep]
     state_hash: str
     scope: list[str] | None = None  # files this plan touches
+    exclude_remote_tracking: bool = False  # if True, hash ignores ahead/behind
     warnings: list[str] = field(default_factory=list)
     params: dict[str, Any] = field(default_factory=dict)
 
@@ -149,7 +150,8 @@ def plan_sync(
         plan_id=plan_id,
         verb="sync",
         steps=steps,
-        state_hash=state.compute_hash(),
+        state_hash=state.compute_hash(exclude_remote_tracking=True),
+        exclude_remote_tracking=True,
         warnings=warnings,
         params={"strategy": strategy},
     )

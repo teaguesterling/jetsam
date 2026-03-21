@@ -97,6 +97,41 @@ class TestPlanSync:
         rebase_step = next(s for s in plan.steps if s.action == "rebase")
         assert rebase_step.params["onto"] == "origin/main"
 
+    def test_sync_hash_stable_when_ahead_behind_change(self):
+        """Sync plan hash should NOT change when only ahead/behind change.
+
+        This is the core bug: fetch updates remote refs which changes
+        ahead/behind counts, causing stale_plan errors.
+        """
+        state1 = _make_state(ahead=0, behind=0, dirty=False)
+        plan1 = plan_sync(state1, plan_id="p_test")
+
+        state2 = _make_state(ahead=0, behind=3, dirty=False)
+        plan2 = plan_sync(state2, plan_id="p_test")
+
+        assert plan1.state_hash == plan2.state_hash
+
+    def test_sync_hash_changes_on_local_state(self):
+        """Sync plan hash SHOULD change when local state changes."""
+        state1 = _make_state(dirty=False)
+        plan1 = plan_sync(state1, plan_id="p_test")
+
+        # Different branch = different hash
+        state2 = _make_state(dirty=False, branch="other")
+        plan2 = plan_sync(state2, plan_id="p_test")
+
+        assert plan1.state_hash != plan2.state_hash
+
+    def test_sync_hash_changes_on_dirty_state(self):
+        """Sync plan hash SHOULD change when working tree becomes dirty."""
+        state1 = _make_state(dirty=False, staged=[], unstaged=[], untracked=[])
+        plan1 = plan_sync(state1, plan_id="p_test")
+
+        state2 = _make_state(dirty=True, staged=[], unstaged=["new.py"], untracked=[])
+        plan2 = plan_sync(state2, plan_id="p_test")
+
+        assert plan1.state_hash != plan2.state_hash
+
 
 class TestPlanShip:
     def test_full_pipeline(self):

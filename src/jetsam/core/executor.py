@@ -121,7 +121,7 @@ def execute_plan(plan: Plan, cwd: str | None = None) -> ExecutionResult:
 
     results: list[StepResult] = []
     for step in plan.steps:
-        result = _execute_step(step, cwd=cwd)
+        result = _execute_step(step, cwd=cwd, prior_results=results)
         results.append(result)
         if not result.ok:
             return ExecutionResult(
@@ -137,7 +137,9 @@ def execute_plan(plan: Plan, cwd: str | None = None) -> ExecutionResult:
     )
 
 
-def _execute_step(step: PlanStep, cwd: str | None = None) -> StepResult:
+def _execute_step(
+    step: PlanStep, cwd: str | None = None, prior_results: list[StepResult] | None = None,
+) -> StepResult:
     """Execute a single plan step."""
     executor = _STEP_EXECUTORS.get(step.action)
     if executor is None:
@@ -146,7 +148,12 @@ def _execute_step(step: PlanStep, cwd: str | None = None) -> StepResult:
             ok=False,
             error=f"Unknown step action: {step.action}",
         )
-    result = executor(step, cwd)
+
+    # Steps that need prior results
+    if step.action == "stash_pop":
+        result = executor(step, cwd, prior_results=prior_results)
+    else:
+        result = executor(step, cwd)
 
     # Add recovery suggestion for failed steps
     if not result.ok and result.error:
@@ -236,11 +243,19 @@ def _exec_stash(step: PlanStep, cwd: str | None) -> StepResult:
         args.extend(["-m", message])
     result = run_git_sync(args, cwd=cwd)
     if result.ok:
-        return StepResult(step="stash", ok=True)
+        actually_stashed = "No local changes to save" not in result.stdout
+        return StepResult(step="stash", ok=True, details={"stashed": actually_stashed})
     return StepResult(step="stash", ok=False, error=result.stderr.strip())
 
 
-def _exec_stash_pop(step: PlanStep, cwd: str | None) -> StepResult:
+def _exec_stash_pop(
+    step: PlanStep, cwd: str | None, *, prior_results: list[StepResult] | None = None,
+) -> StepResult:
+    # Check if a prior stash step actually stashed anything
+    if prior_results is not None:
+        stash_result = next((r for r in prior_results if r.step == "stash"), None)
+        if stash_result and not stash_result.details.get("stashed", True):
+            return StepResult(step="stash_pop", ok=True, details={"skipped": True})
     result = run_git_sync(["stash", "pop"], cwd=cwd)
     if result.ok:
         return StepResult(step="stash_pop", ok=True)

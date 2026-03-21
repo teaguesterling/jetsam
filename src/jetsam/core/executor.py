@@ -236,14 +236,21 @@ def _exec_merge(step: PlanStep, cwd: str | None) -> StepResult:
     return StepResult(step="merge", ok=False, error=result.stderr.strip())
 
 
+def _stash_ref(cwd: str | None) -> str | None:
+    """Return the current stash tip SHA, or None if the stash is empty."""
+    ref = run_git_sync(["rev-parse", "--verify", "--quiet", "refs/stash"], cwd=cwd)
+    return ref.stdout.strip() if ref.ok else None
+
+
 def _exec_stash(step: PlanStep, cwd: str | None) -> StepResult:
     message = step.params.get("message", "")
+    ref_before = _stash_ref(cwd)
     args = ["stash", "push"]
     if message:
         args.extend(["-m", message])
     result = run_git_sync(args, cwd=cwd)
     if result.ok:
-        actually_stashed = "No local changes to save" not in result.stdout
+        actually_stashed = _stash_ref(cwd) != ref_before
         return StepResult(step="stash", ok=True, details={"stashed": actually_stashed})
     return StepResult(step="stash", ok=False, error=result.stderr.strip())
 
@@ -252,9 +259,8 @@ def _exec_stash_pop(
     step: PlanStep, cwd: str | None, *, prior_results: list[StepResult] | None = None,
 ) -> StepResult:
     # Check if a prior stash step actually stashed anything
-    if prior_results is not None:
-        stash_result = next((r for r in prior_results if r.step == "stash"), None)
-        if stash_result and not stash_result.details.get("stashed", True):
+    for r in prior_results or []:
+        if r.step == "stash" and not r.details.get("stashed", True):
             return StepResult(step="stash_pop", ok=True, details={"skipped": True})
     result = run_git_sync(["stash", "pop"], cwd=cwd)
     if result.ok:

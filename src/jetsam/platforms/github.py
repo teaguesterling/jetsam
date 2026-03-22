@@ -251,7 +251,9 @@ class GitHubPlatform(Platform):
         comments.sort(key=lambda c: c.get("created_at", ""))
         return comments
 
-    def issue_close(self, number: int, comment: str | None = None, reason: str = "completed") -> dict[str, str]:
+    def issue_close(
+        self, number: int, comment: str | None = None, reason: str = "completed"
+    ) -> dict[str, str]:
         """Close an issue, optionally with a comment."""
         if comment:
             ok, _, stderr = self._run_gh(["issue", "comment", str(number), "--body", comment])

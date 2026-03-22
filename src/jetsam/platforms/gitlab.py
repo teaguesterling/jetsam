@@ -215,7 +215,9 @@ class GitLabPlatform(Platform):
         """Read comments on an MR. Not yet implemented for GitLab."""
         raise NotImplementedError("pr_comments not yet implemented for GitLab")
 
-    def issue_close(self, number: int, comment: str | None = None, reason: str = "completed") -> dict[str, str]:
+    def issue_close(
+        self, number: int, comment: str | None = None, reason: str = "completed"
+    ) -> dict[str, str]:
         """Close an issue. Not yet implemented for GitLab."""
         raise NotImplementedError("issue_close not yet implemented for GitLab")
 

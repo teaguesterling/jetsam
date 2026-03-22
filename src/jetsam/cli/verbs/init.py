@@ -81,13 +81,19 @@ HOOK_SCRIPT = """\
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
 
-if echo "$COMMAND" | grep -qE '^git\\s+(commit|push|add|merge|rebase|fetch|stash|checkout|switch)'; then
-  echo "JetSam has tools for this. Use save (commit), sync (push/fetch/merge), ship (commit+push+PR), start/switch (branching) instead of raw git." >&2
+GIT_OPS='commit|push|add|merge|rebase|fetch|stash|checkout|switch'
+if echo "$COMMAND" | grep -qE "^git\\s+($GIT_OPS)"; then
+  MSG="JetSam has tools for this. Use save, sync, ship, start/switch"
+  MSG="$MSG instead of raw git."
+  echo "$MSG" >&2
   exit 0
 fi
 
 if echo "$COMMAND" | grep -qE '^gh\\s+(pr|issue|release|run)'; then
-  echo "JetSam has tools for GitHub operations. Use pr_view, pr_list, pr_comment, pr_review, checks, issues, issue_close, ship, or release instead of gh CLI." >&2
+  MSG="JetSam has tools for GitHub ops. Use pr_view, pr_list,"
+  MSG="$MSG pr_comment, pr_review, checks, issues, issue_close,"
+  MSG="$MSG ship, or release instead of gh CLI."
+  echo "$MSG" >&2
   exit 0
 fi
 
@@ -164,7 +170,13 @@ def has_alias_marker(content: str) -> bool:
 @click.option("--hooks", "hooks_target", default=None,
               help="Generate agent hook config (claude, none)")
 @click.pass_context
-def init(ctx: click.Context, mcp: bool, aliases: bool, agents_target: str | None, hooks_target: str | None) -> None:
+def init(
+    ctx: click.Context,
+    mcp: bool,
+    aliases: bool,
+    agents_target: str | None,
+    hooks_target: str | None,
+) -> None:
     """Initialize jetsam in the current repository.
 
     Detects the platform, creates .jetsam/ directory,

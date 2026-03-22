@@ -30,7 +30,7 @@ def _make_state(**kwargs):
 class TestPlanSave:
     def test_basic(self):
         state = _make_state()
-        plan = plan_save(state, plan_id="p_test", message="fix bug")
+        plan = plan_save(state, plan_id="p_test", message="fix bug", config=JetsamConfig())
         assert plan.verb == "save"
         assert len(plan.steps) == 2  # stage + commit
         assert plan.steps[0].action == "stage"
@@ -39,21 +39,21 @@ class TestPlanSave:
 
     def test_include_pattern(self):
         state = _make_state(unstaged=["src/main.py", "tests/test_main.py", "docs/readme.md"])
-        plan = plan_save(state, plan_id="p_test", message="fix", include="src/*.py")
+        plan = plan_save(state, plan_id="p_test", message="fix", include="src/*.py", config=JetsamConfig())
         stage_step = plan.steps[0]
         assert "src/main.py" in stage_step.params["files"]
         assert "docs/readme.md" not in stage_step.params["files"]
 
     def test_exclude_pattern(self):
         state = _make_state(unstaged=["src/main.py", "src/generated.py"])
-        plan = plan_save(state, plan_id="p_test", message="fix", exclude="*generated*")
+        plan = plan_save(state, plan_id="p_test", message="fix", exclude="*generated*", config=JetsamConfig())
         stage_step = plan.steps[0]
         assert "src/main.py" in stage_step.params["files"]
         assert "src/generated.py" not in stage_step.params["files"]
 
     def test_explicit_files(self):
         state = _make_state()
-        plan = plan_save(state, plan_id="p_test", message="fix", files=["specific.py"])
+        plan = plan_save(state, plan_id="p_test", message="fix", files=["specific.py"], config=JetsamConfig())
         stage_step = plan.steps[0]
         assert stage_step.params["files"] == ["specific.py"]
 
@@ -61,20 +61,20 @@ class TestPlanSave:
         state = _make_state()
         plan = plan_save(
             state, plan_id="p_test", message="fix",
-            files=["keep.py", "generated.py"], exclude="*generated*",
+            files=["keep.py", "generated.py"], exclude="*generated*", config=JetsamConfig(),
         )
         stage_step = plan.steps[0]
         assert stage_step.params["files"] == ["keep.py"]
 
     def test_auto_message(self):
         state = _make_state(unstaged=["src/parser.py"])
-        plan = plan_save(state, plan_id="p_test")
+        plan = plan_save(state, plan_id="p_test", config=JetsamConfig())
         commit_step = next(s for s in plan.steps if s.action == "commit")
         assert "parser" in commit_step.params["message"]
 
     def test_nothing_to_commit(self):
         state = _make_state(staged=[], unstaged=[], untracked=[], dirty=False)
-        plan = plan_save(state, plan_id="p_test", message="noop")
+        plan = plan_save(state, plan_id="p_test", message="noop", config=JetsamConfig())
         assert any("No files" in w for w in plan.warnings)
         assert len(plan.steps) == 0  # should have no steps
 

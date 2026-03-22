@@ -75,6 +75,7 @@ class TestPlanSave:
         state = _make_state(staged=[], unstaged=[], untracked=[], dirty=False)
         plan = plan_save(state, plan_id="p_test", message="noop")
         assert any("No files" in w for w in plan.warnings)
+        assert len(plan.steps) == 0  # should have no steps
 
 
 class TestPlanSync:

@@ -61,6 +61,14 @@ def plan_save(
 
     if not target_files and not state.staged:
         warnings.append("No files to stage or commit")
+        return Plan(
+            plan_id=plan_id,
+            verb="save",
+            steps=[],
+            state_hash=state.compute_hash(),
+            warnings=warnings,
+            params={"message": message, "include": include, "exclude": exclude, "files": files},
+        )
 
     # Determine commit message
     if not message:

@@ -1,6 +1,7 @@
 """Tests for plan generation."""
 
-from jetsam.core.planner import plan_finish, plan_save, plan_ship, plan_sync
+from jetsam.config.manager import JetsamConfig
+from jetsam.core.planner import plan_finish, plan_save, plan_ship, plan_start, plan_sync
 from jetsam.core.state import RepoState
 
 
@@ -76,6 +77,37 @@ class TestPlanSave:
         plan = plan_save(state, plan_id="p_test", message="noop")
         assert any("No files" in w for w in plan.warnings)
         assert len(plan.steps) == 0  # should have no steps
+
+    def test_auto_push_adds_push_step(self):
+        state = _make_state()
+        config = JetsamConfig(auto_push=True)
+        plan = plan_save(state, plan_id="p_test", message="fix bug", config=config)
+        actions = [s.action for s in plan.steps]
+        assert "push" in actions
+        push_step = next(s for s in plan.steps if s.action == "push")
+        assert push_step.params["branch"] == "feature"
+
+    def test_auto_push_false_no_push_step(self):
+        state = _make_state()
+        config = JetsamConfig(auto_push=False)
+        plan = plan_save(state, plan_id="p_test", message="fix bug", config=config)
+        actions = [s.action for s in plan.steps]
+        assert "push" not in actions
+
+    def test_auto_push_on_default_branch_no_push(self):
+        state = _make_state(branch="main", default_branch="main")
+        config = JetsamConfig(auto_push=True)
+        plan = plan_save(state, plan_id="p_test", message="fix bug", config=config)
+        actions = [s.action for s in plan.steps]
+        assert "push" not in actions
+
+    def test_default_config_no_push(self):
+        """Default config (auto_push=False) preserves existing behavior."""
+        state = _make_state()
+        config = JetsamConfig()
+        plan = plan_save(state, plan_id="p_test", message="fix bug", config=config)
+        actions = [s.action for s in plan.steps]
+        assert "push" not in actions
 
 
 class TestPlanSync:

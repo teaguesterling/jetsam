@@ -7,6 +7,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from jetsam.config.manager import JetsamConfig, load_config
 from jetsam.core.state import RepoState
 
 
@@ -53,8 +54,12 @@ def plan_save(
     include: str | None = None,
     exclude: str | None = None,
     files: list[str] | None = None,
+    config: JetsamConfig | None = None,
 ) -> Plan:
     """Generate a plan for the 'save' verb (stage + commit)."""
+    if config is None:
+        config = load_config(state.repo_root)
+
     # Determine which files to stage
     target_files = _resolve_files(state, include, exclude, files)
     warnings: list[str] = []
@@ -86,6 +91,19 @@ def plan_save(
             params={"message": message, "file_count": len(all_staged)},
         )
     )
+
+    # Auto-push if configured (but not on default branch)
+    if config.auto_push and state.branch != state.default_branch:
+        steps.append(
+            PlanStep(
+                action="push",
+                params={
+                    "branch": state.branch,
+                    "remote": "origin",
+                    "set_upstream": state.upstream is None,
+                },
+            )
+        )
 
     scope = target_files or state.staged
 

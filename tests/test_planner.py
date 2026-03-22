@@ -281,6 +281,12 @@ class TestPlanShip:
         assert d["plan_id"] == "p_test"
         assert isinstance(d["steps"], list)
         assert all(isinstance(s, dict) for s in d["steps"])
+        # P6-003: to_dict includes params, scope, state_hash
+        assert "params" in d
+        assert d["params"]["message"] == "ship it"
+        assert "scope" in d
+        assert "state_hash" in d
+        assert isinstance(d["state_hash"], str)
 
     def test_files_parameter(self):
         """ship with files= scopes staging to listed files only."""

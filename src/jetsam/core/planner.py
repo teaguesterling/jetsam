@@ -40,6 +40,9 @@ class Plan:
             "verb": self.verb,
             "steps": [s.to_dict() for s in self.steps],
             "warnings": self.warnings,
+            "params": self.params,
+            "scope": self.scope,
+            "state_hash": self.state_hash,
         }
         if self.exclude_remote_tracking:
             d["exclude_remote_tracking"] = True

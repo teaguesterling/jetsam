@@ -460,6 +460,60 @@ class TestInitAgents:
         assert content.count("<!-- jetsam:start -->") == 1
 
 
+class TestInitHooks:
+    def test_hooks_claude_creates_settings(self, tmp_git_repo: Path):
+        result = _invoke(["--json", "init", "--hooks", "claude"], tmp_git_repo)
+        assert result.exit_code == 0
+        settings = tmp_git_repo / ".claude" / "settings.json"
+        assert settings.exists()
+        data = json.loads(settings.read_text())
+        assert "hooks" in data
+        assert "PreToolUse" in data["hooks"]
+
+    def test_hooks_claude_creates_script(self, tmp_git_repo: Path):
+        _invoke(["init", "--hooks", "claude"], tmp_git_repo)
+        script = tmp_git_repo / ".claude" / "hooks" / "jetsam-warn.sh"
+        assert script.exists()
+        content = script.read_text()
+        assert "jq" in content
+        assert "git" in content
+        # Script should be executable
+        assert script.stat().st_mode & 0o111
+
+    def test_hooks_none_skips(self, tmp_git_repo: Path):
+        result = _invoke(["--json", "init", "--hooks", "none"], tmp_git_repo)
+        assert result.exit_code == 0
+        assert not (tmp_git_repo / ".claude" / "settings.json").exists()
+
+    def test_hooks_gemini_errors(self, tmp_git_repo: Path):
+        result = _invoke(["init", "--hooks", "gemini"], tmp_git_repo)
+        assert result.exit_code != 0 or "not yet supported" in result.output
+
+    def test_hooks_merges_existing_settings(self, tmp_git_repo: Path):
+        """Merges into existing settings.json without overwriting."""
+        claude_dir = tmp_git_repo / ".claude"
+        claude_dir.mkdir()
+        settings = claude_dir / "settings.json"
+        settings.write_text(json.dumps({"other_setting": True}))
+
+        _invoke(["init", "--hooks", "claude"], tmp_git_repo)
+        data = json.loads(settings.read_text())
+        assert data["other_setting"] is True
+        assert "hooks" in data
+
+    def test_hooks_idempotent(self, tmp_git_repo: Path):
+        """Running twice doesn't duplicate hooks."""
+        _invoke(["init", "--hooks", "claude"], tmp_git_repo)
+        _invoke(["init", "--hooks", "claude"], tmp_git_repo)
+        data = json.loads((tmp_git_repo / ".claude" / "settings.json").read_text())
+        bash_matchers = [m for m in data["hooks"]["PreToolUse"] if m.get("matcher") == "Bash"]
+        jetsam_hooks = [
+            m for m in bash_matchers
+            if any("jetsam-warn" in h.get("command", "") for h in m.get("hooks", []))
+        ]
+        assert len(jetsam_hooks) == 1
+
+
 # ── Integration: switch + save flow ──────────────────────────────
 
 

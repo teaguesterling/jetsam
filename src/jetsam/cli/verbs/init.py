@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 import click
 
@@ -74,6 +75,38 @@ Do NOT run git or gh commands through Bash. Use these JetSam MCP tools instead:
 """
 
 
+HOOK_SCRIPT = """\
+#!/bin/bash
+# jetsam: warn when agent uses raw git/gh instead of JetSam MCP tools
+INPUT=$(cat)
+COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
+
+if echo "$COMMAND" | grep -qE '^git\\s+(commit|push|add|merge|rebase|fetch|stash|checkout|switch)'; then
+  echo "JetSam has tools for this. Use save (commit), sync (push/fetch/merge), ship (commit+push+PR), start/switch (branching) instead of raw git." >&2
+  exit 0
+fi
+
+if echo "$COMMAND" | grep -qE '^gh\\s+(pr|issue|release|run)'; then
+  echo "JetSam has tools for GitHub operations. Use pr_view, pr_list, pr_comment, pr_review, checks, issues, issue_close, ship, or release instead of gh CLI." >&2
+  exit 0
+fi
+
+exit 0
+"""
+
+HOOK_COMMAND_PATH = ".claude/hooks/jetsam-warn.sh"
+
+HOOK_SETTINGS_ENTRY: dict[str, Any] = {
+    "matcher": "Bash",
+    "hooks": [
+        {
+            "type": "command",
+            "command": HOOK_COMMAND_PATH,
+        }
+    ],
+}
+
+
 def generate_alias_block_posix() -> str:
     """Generate alias block for bash/zsh."""
     lines = [ALIAS_MARKER]
@@ -128,8 +161,10 @@ def has_alias_marker(content: str) -> bool:
 @click.option("--aliases", is_flag=True, help="Install shell aliases (jt, jts, etc.)")
 @click.option("--agents", "agents_target", default=None,
               help="Generate agent instructions file (claude, gemini, agents, none, or path)")
+@click.option("--hooks", "hooks_target", default=None,
+              help="Generate agent hook config (claude, none)")
 @click.pass_context
-def init(ctx: click.Context, mcp: bool, aliases: bool, agents_target: str | None) -> None:
+def init(ctx: click.Context, mcp: bool, aliases: bool, agents_target: str | None, hooks_target: str | None) -> None:
     """Initialize jetsam in the current repository.
 
     Detects the platform, creates .jetsam/ directory,
@@ -196,6 +231,46 @@ def init(ctx: click.Context, mcp: bool, aliases: bool, agents_target: str | None
 
         results["agents_file"] = str(agents_path)
 
+    # Generate hooks if requested
+    if hooks_target:
+        if hooks_target == "none":
+            pass
+        elif hooks_target == "gemini":
+            click.echo("Error: Gemini hooks not yet supported", err=True)
+            raise SystemExit(1)
+        elif hooks_target == "claude":
+            # Write hook script
+            hook_dir = Path(state.repo_root) / ".claude" / "hooks"
+            hook_dir.mkdir(parents=True, exist_ok=True)
+            hook_path = hook_dir / "jetsam-warn.sh"
+            hook_path.write_text(HOOK_SCRIPT)
+            hook_path.chmod(hook_path.stat().st_mode | 0o111)
+
+            # Merge into settings.json
+            settings_path = Path(state.repo_root) / ".claude" / "settings.json"
+            settings: dict[str, Any] = {}
+            if settings_path.exists():
+                try:
+                    settings = json.loads(settings_path.read_text())
+                except (json.JSONDecodeError, OSError):
+                    settings = {}
+
+            if "hooks" not in settings:
+                settings["hooks"] = {}
+            if "PreToolUse" not in settings["hooks"]:
+                settings["hooks"]["PreToolUse"] = []
+
+            # Remove existing jetsam hook entry if present
+            settings["hooks"]["PreToolUse"] = [
+                m for m in settings["hooks"]["PreToolUse"]
+                if not any("jetsam-warn" in h.get("command", "") for h in m.get("hooks", []))
+            ]
+            settings["hooks"]["PreToolUse"].append(HOOK_SETTINGS_ENTRY)
+
+            settings_path.write_text(json.dumps(settings, indent=2) + "\n")
+            results["hooks_file"] = str(settings_path)
+            results["hooks_script"] = str(hook_path)
+
     # Install shell aliases if requested
     if aliases:
         shell = detect_shell()
@@ -231,6 +306,8 @@ def init(ctx: click.Context, mcp: bool, aliases: bool, agents_target: str | None
             click.echo(f"  MCP:      {results['mcp_json']}")
         if agents_target and agents_target != "none":
             click.echo(f"  Agents: {results.get('agents_file', '')}")
+        if hooks_target and hooks_target not in ("none", "gemini"):
+            click.echo(f"  Hooks:  {results.get('hooks_file', '')}")
         if aliases:
             status = results.get("aliases", "")
             path = results.get("aliases_file", "")

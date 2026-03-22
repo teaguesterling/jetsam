@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from jetsam.platforms.base import Platform
 
 from mcp.server.fastmcp import FastMCP
 
@@ -27,7 +30,7 @@ from jetsam.git.wrapper import run_git_sync
 _plan_store: PlanStore | None = None
 
 
-def _get_platform(state: Any) -> Any:
+def _get_platform(state: Any) -> Platform | None:
     """Resolve the platform adapter from state."""
     from jetsam.platforms import get_platform
     return get_platform(state.platform, cwd=state.repo_root)

@@ -229,15 +229,17 @@ def init(
         agents_path.parent.mkdir(parents=True, exist_ok=True)
 
         if agents_path.exists():
-            existing = agents_path.read_text()
-            if AGENTS_MARKER_START in existing and AGENTS_MARKER_END in existing:
+            existing_text = agents_path.read_text()
+            if AGENTS_MARKER_START in existing_text and AGENTS_MARKER_END in existing_text:
                 # Replace between markers
-                before = existing[:existing.index(AGENTS_MARKER_START)]
-                after = existing[existing.index(AGENTS_MARKER_END) + len(AGENTS_MARKER_END):]
+                start = existing_text.index(AGENTS_MARKER_START)
+                end = existing_text.index(AGENTS_MARKER_END) + len(AGENTS_MARKER_END)
+                before = existing_text[:start]
+                after = existing_text[end:]
                 agents_path.write_text(before + AGENTS_CONTENT.rstrip() + "\n" + after)
             else:
                 # Append
-                agents_path.write_text(existing.rstrip() + "\n\n" + AGENTS_CONTENT)
+                agents_path.write_text(existing_text.rstrip() + "\n\n" + AGENTS_CONTENT)
         else:
             agents_path.write_text(AGENTS_CONTENT)
 

@@ -155,9 +155,9 @@ def _execute_step(
     # Some steps inspect earlier results (e.g. stash_pop checks if stash
     # actually stored anything). Register such actions in _STEPS_NEEDING_PRIOR.
     if step.action in _STEPS_NEEDING_PRIOR:
-        result = executor(step, cwd, prior_results=prior_results)
+        result: StepResult = executor(step, cwd, prior_results=prior_results)  # type: ignore[operator]
     else:
-        result = executor(step, cwd)
+        result = executor(step, cwd)  # type: ignore[operator]
 
     # Add recovery suggestion for failed steps
     if not result.ok and result.error:

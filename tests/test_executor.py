@@ -5,8 +5,8 @@ import subprocess
 from pathlib import Path
 
 from jetsam.core.executor import execute_plan
-from jetsam.core.planner import Plan, PlanStep, plan_save, plan_sync
-from jetsam.core.state import RepoState, build_state
+from jetsam.core.planner import plan_save, plan_sync
+from jetsam.core.state import build_state
 
 
 class TestExecutePlan:

@@ -45,6 +45,25 @@ def _get_store() -> PlanStore:
     return _plan_store
 
 
+def _no_platform_error() -> dict[str, Any]:
+    """Standard error for missing platform configuration."""
+    return JetsamError(
+        error="no_platform",
+        message="No platform configured.",
+        suggested_action="Configure a GitHub or GitLab remote.",
+        recoverable=False,
+    ).to_dict()
+
+
+def _no_pr_error(branch: str) -> dict[str, Any]:
+    """Standard error for missing PR."""
+    return JetsamError(
+        error="no_pr",
+        message=f"No PR found for branch '{branch}'.",
+        recoverable=True,
+    ).to_dict()
+
+
 def register_tools(mcp: FastMCP) -> None:
     """Register all jetsam tools with the MCP server."""
 

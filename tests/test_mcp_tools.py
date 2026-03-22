@@ -212,3 +212,23 @@ class TestNewToolsRegistration:
         assert "pr_review" in tool_names
         assert "pr_comments" in tool_names
         assert "issue_close" in tool_names
+
+
+class TestErrorHelpers:
+    """Test the error helper functions produce standard JetsamError format."""
+
+    def test_no_platform_error(self):
+        from jetsam.mcp.tools import _no_platform_error
+
+        result = _no_platform_error()
+        assert result["error"] == "no_platform"
+        assert "message" in result
+        assert result["recoverable"] is False
+
+    def test_no_pr_error(self):
+        from jetsam.mcp.tools import _no_pr_error
+
+        result = _no_pr_error("feature/foo")
+        assert result["error"] == "no_pr"
+        assert "feature/foo" in result["message"]
+        assert result["recoverable"] is True

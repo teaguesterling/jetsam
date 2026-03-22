@@ -56,6 +56,15 @@ class TestPlanSave:
         stage_step = plan.steps[0]
         assert stage_step.params["files"] == ["specific.py"]
 
+    def test_explicit_files_with_exclude(self):
+        state = _make_state()
+        plan = plan_save(
+            state, plan_id="p_test", message="fix",
+            files=["keep.py", "generated.py"], exclude="*generated*",
+        )
+        stage_step = plan.steps[0]
+        assert stage_step.params["files"] == ["keep.py"]
+
     def test_auto_message(self):
         state = _make_state(unstaged=["src/parser.py"])
         plan = plan_save(state, plan_id="p_test")

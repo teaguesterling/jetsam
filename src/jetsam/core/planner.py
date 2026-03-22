@@ -588,6 +588,8 @@ def _resolve_files(
 ) -> list[str]:
     """Resolve which files to stage based on include/exclude/files patterns."""
     if files:
+        if exclude:
+            return [f for f in files if not fnmatch.fnmatch(f, exclude)]
         return files
 
     # Pool of candidates: unstaged + untracked (staged are already staged)

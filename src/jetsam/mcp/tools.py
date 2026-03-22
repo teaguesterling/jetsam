@@ -167,7 +167,11 @@ def register_tools(mcp: FastMCP) -> None:
 
         result = run_git_sync(args)
         if not result.ok:
-            return [{"error": result.stderr.strip()}]
+            return JetsamError(
+                error="git_error",
+                message=result.stderr.strip(),
+                recoverable=True,
+            ).to_dict()
 
         entries = parse_log(result.stdout)
         return [asdict(e) for e in entries]
@@ -194,7 +198,11 @@ def register_tools(mcp: FastMCP) -> None:
 
             result = run_git_sync(args)
             if not result.ok:
-                return {"error": result.stderr.strip()}
+                return JetsamError(
+                    error="git_error",
+                    message=result.stderr.strip(),
+                    recoverable=True,
+                ).to_dict()
 
             parsed = parse_diff_numstat(result.stdout)
             return asdict(parsed)
@@ -206,6 +214,12 @@ def register_tools(mcp: FastMCP) -> None:
                 args.append(target)
 
             result = run_git_sync(args)
+            if not result.ok:
+                return JetsamError(
+                    error="git_error",
+                    message=result.stderr.strip(),
+                    recoverable=True,
+                ).to_dict()
             return {"diff": result.stdout, "ok": result.ok}
 
     @mcp.tool()

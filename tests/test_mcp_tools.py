@@ -214,6 +214,70 @@ class TestNewToolsRegistration:
         assert "issue_close" in tool_names
 
 
+class TestErrorFormats:
+    """Verify all error paths return standard JetsamError dicts."""
+
+    def test_log_error_returns_jetsam_error_dict(
+        self, tmp_git_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """log() should return a JetsamError dict, not a list, on error."""
+        monkeypatch.setenv("GIT_DIR", str(tmp_git_repo / ".git"))
+        monkeypatch.setenv("GIT_WORK_TREE", str(tmp_git_repo))
+
+        from mcp.server.fastmcp import FastMCP
+
+        mcp = FastMCP("test")
+        mcp_tools.register_tools(mcp)
+
+        log_fn = mcp._tool_manager._tools["log"].fn
+        result = log_fn(n=10, branch="nonexistent-branch-xyz")
+
+        assert isinstance(result, dict), "Error should be a dict, not a list"
+        assert result["error"] == "git_error"
+        assert "message" in result
+        assert "recoverable" in result
+
+    def test_diff_stat_error_returns_jetsam_error_dict(
+        self, tmp_git_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """diff() in stat mode should return JetsamError dict on error."""
+        monkeypatch.setenv("GIT_DIR", str(tmp_git_repo / ".git"))
+        monkeypatch.setenv("GIT_WORK_TREE", str(tmp_git_repo))
+
+        from mcp.server.fastmcp import FastMCP
+
+        mcp = FastMCP("test")
+        mcp_tools.register_tools(mcp)
+
+        diff_fn = mcp._tool_manager._tools["diff"].fn
+        result = diff_fn(target="nonexistent-ref-xyz", stat=True, staged=False)
+
+        assert isinstance(result, dict)
+        assert result["error"] == "git_error"
+        assert "message" in result
+        assert "recoverable" in result
+
+    def test_diff_full_error_returns_jetsam_error_dict(
+        self, tmp_git_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """diff() in full mode should return JetsamError dict on error."""
+        monkeypatch.setenv("GIT_DIR", str(tmp_git_repo / ".git"))
+        monkeypatch.setenv("GIT_WORK_TREE", str(tmp_git_repo))
+
+        from mcp.server.fastmcp import FastMCP
+
+        mcp = FastMCP("test")
+        mcp_tools.register_tools(mcp)
+
+        diff_fn = mcp._tool_manager._tools["diff"].fn
+        result = diff_fn(target="nonexistent-ref-xyz", stat=False, staged=False)
+
+        assert isinstance(result, dict)
+        assert result["error"] == "git_error"
+        assert "message" in result
+        assert "recoverable" in result
+
+
 class TestErrorHelpers:
     """Test the error helper functions produce standard JetsamError format."""
 

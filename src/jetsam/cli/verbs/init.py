@@ -24,6 +24,55 @@ ALIAS_MAP = {
 
 ALIAS_MARKER = "# jetsam aliases"
 
+# Agent instruction file markers and content
+AGENTS_MARKER_START = "<!-- jetsam:start -->"
+AGENTS_MARKER_END = "<!-- jetsam:end -->"
+
+AGENTS_FILE_MAP = {
+    "claude": "CLAUDE.md",
+    "gemini": "GEMINI.md",
+    "agents": "AGENTS.md",
+}
+
+AGENTS_CONTENT = """\
+<!-- jetsam:start -->
+## jetsam
+
+JetSam is a git workflow accelerator available as an MCP server. Workflow
+operations (save, sync, ship, etc.) return execution plans — review the plan,
+then call `confirm()` to execute. Query operations (status, log, diff, etc.)
+return results directly. Use JetSam tools instead of running git or gh commands
+through Bash.
+
+### Git/GitHub Operations → JetSam
+
+Do NOT run git or gh commands through Bash. Use these JetSam MCP tools instead:
+
+| Instead of... | Use JetSam |
+|---|---|
+| `git status` | `mcp__jetsam__status` |
+| `git add && git commit` | `mcp__jetsam__save` |
+| `git push` / fetch+merge+push | `mcp__jetsam__sync` |
+| `git add && commit && push && gh pr create` | `mcp__jetsam__ship` |
+| `git checkout -b` to work on issue/feature | `mcp__jetsam__start` |
+| `git checkout` / `git switch` (existing branch) | `mcp__jetsam__switch` |
+| `git log` | `mcp__jetsam__log` |
+| `git diff` | `mcp__jetsam__diff` |
+| `gh pr merge` + branch cleanup | `mcp__jetsam__finish` |
+| Branch pruning / cleanup | `mcp__jetsam__tidy` |
+| `gh pr view` | `mcp__jetsam__pr_view` |
+| `gh pr list` | `mcp__jetsam__pr_list` |
+| `gh pr checks` / `gh run view` | `mcp__jetsam__checks` |
+| `gh pr comment` | `mcp__jetsam__pr_comment` |
+| `gh pr review` | `mcp__jetsam__pr_review` |
+| `gh api .../comments` (read PR comments) | `mcp__jetsam__pr_comments` |
+| `gh issue list` | `mcp__jetsam__issues` |
+| `gh issue close` | `mcp__jetsam__issue_close` |
+| `gh release create` | `mcp__jetsam__release` |
+| Other git commands | `mcp__jetsam__git` (passthrough) |
+<!-- jetsam:end -->
+"""
+
 
 def generate_alias_block_posix() -> str:
     """Generate alias block for bash/zsh."""
@@ -77,8 +126,10 @@ def has_alias_marker(content: str) -> bool:
 @click.command("init")
 @click.option("--mcp", is_flag=True, help="Also generate .mcp.json for MCP integration")
 @click.option("--aliases", is_flag=True, help="Install shell aliases (jt, jts, etc.)")
+@click.option("--agents", "agents_target", default=None,
+              help="Generate agent instructions file (claude, gemini, agents, none, or path)")
 @click.pass_context
-def init(ctx: click.Context, mcp: bool, aliases: bool) -> None:
+def init(ctx: click.Context, mcp: bool, aliases: bool, agents_target: str | None) -> None:
     """Initialize jetsam in the current repository.
 
     Detects the platform, creates .jetsam/ directory,
@@ -124,6 +175,27 @@ def init(ctx: click.Context, mcp: bool, aliases: bool) -> None:
         mcp_path.write_text(json.dumps(existing, indent=2) + "\n")
         results["mcp_json"] = str(mcp_path)
 
+    # Generate agent instructions file if requested
+    if agents_target and agents_target != "none":
+        filename = AGENTS_FILE_MAP.get(agents_target, agents_target)
+        agents_path = Path(state.repo_root) / filename
+        agents_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if agents_path.exists():
+            existing = agents_path.read_text()
+            if AGENTS_MARKER_START in existing and AGENTS_MARKER_END in existing:
+                # Replace between markers
+                before = existing[:existing.index(AGENTS_MARKER_START)]
+                after = existing[existing.index(AGENTS_MARKER_END) + len(AGENTS_MARKER_END):]
+                agents_path.write_text(before + AGENTS_CONTENT.rstrip() + "\n" + after)
+            else:
+                # Append
+                agents_path.write_text(existing.rstrip() + "\n\n" + AGENTS_CONTENT)
+        else:
+            agents_path.write_text(AGENTS_CONTENT)
+
+        results["agents_file"] = str(agents_path)
+
     # Install shell aliases if requested
     if aliases:
         shell = detect_shell()
@@ -157,6 +229,8 @@ def init(ctx: click.Context, mcp: bool, aliases: bool) -> None:
         click.echo(f"  Config:   {jetsam_dir}")
         if mcp:
             click.echo(f"  MCP:      {results['mcp_json']}")
+        if agents_target and agents_target != "none":
+            click.echo(f"  Agents: {results.get('agents_file', '')}")
         if aliases:
             status = results.get("aliases", "")
             path = results.get("aliases_file", "")

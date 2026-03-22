@@ -410,6 +410,56 @@ class TestInitVerb:
         assert result.exit_code == 0
 
 
+class TestInitAgents:
+    def test_agents_claude_creates_file(self, tmp_git_repo: Path):
+        result = _invoke(["--json", "init", "--agents", "claude"], tmp_git_repo)
+        assert result.exit_code == 0
+        claude_md = tmp_git_repo / "CLAUDE.md"
+        assert claude_md.exists()
+        content = claude_md.read_text()
+        assert "<!-- jetsam:start -->" in content
+        assert "<!-- jetsam:end -->" in content
+        assert "mcp__jetsam__save" in content
+        assert "mcp__jetsam__sync" in content
+
+    def test_agents_gemini_creates_file(self, tmp_git_repo: Path):
+        result = _invoke(["--json", "init", "--agents", "gemini"], tmp_git_repo)
+        assert result.exit_code == 0
+        assert (tmp_git_repo / "GEMINI.md").exists()
+
+    def test_agents_agents_creates_file(self, tmp_git_repo: Path):
+        result = _invoke(["--json", "init", "--agents", "agents"], tmp_git_repo)
+        assert result.exit_code == 0
+        assert (tmp_git_repo / "AGENTS.md").exists()
+
+    def test_agents_none_skips(self, tmp_git_repo: Path):
+        result = _invoke(["--json", "init", "--agents", "none"], tmp_git_repo)
+        assert result.exit_code == 0
+        assert not (tmp_git_repo / "CLAUDE.md").exists()
+
+    def test_agents_custom_path(self, tmp_git_repo: Path):
+        result = _invoke(["--json", "init", "--agents", "docs/AGENT.md"], tmp_git_repo)
+        assert result.exit_code == 0
+        assert (tmp_git_repo / "docs" / "AGENT.md").exists()
+
+    def test_agents_merge_replaces_markers(self, tmp_git_repo: Path):
+        """Re-running replaces content between markers."""
+        claude_md = tmp_git_repo / "CLAUDE.md"
+        claude_md.write_text("# My Project\n\nExisting content.\n")
+        _invoke(["init", "--agents", "claude"], tmp_git_repo)
+        content = claude_md.read_text()
+        assert "# My Project" in content
+        assert "Existing content." in content
+        assert "mcp__jetsam__save" in content
+
+    def test_agents_idempotent(self, tmp_git_repo: Path):
+        """Running twice doesn't duplicate content."""
+        _invoke(["init", "--agents", "claude"], tmp_git_repo)
+        _invoke(["init", "--agents", "claude"], tmp_git_repo)
+        content = (tmp_git_repo / "CLAUDE.md").read_text()
+        assert content.count("<!-- jetsam:start -->") == 1
+
+
 # ── Integration: switch + save flow ──────────────────────────────
 
 

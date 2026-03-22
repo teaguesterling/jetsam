@@ -100,6 +100,7 @@ def register_tools(mcp: FastMCP) -> None:
         message: str | None = None,
         include: str | None = None,
         exclude: str | None = None,
+        files: list[str] | None = None,
         to: str | None = None,
         pr: bool = True,
         merge: bool = False,
@@ -110,6 +111,7 @@ def register_tools(mcp: FastMCP) -> None:
             message: Commit message and PR title.
             include: Glob pattern to filter files to stage.
             exclude: Glob pattern to filter files out.
+            files: Explicit file paths to stage.
             to: Target branch for PR (default: main/master).
             pr: Create/update a PR (default: true).
             merge: Also merge the PR after creating it.
@@ -119,7 +121,7 @@ def register_tools(mcp: FastMCP) -> None:
         plan = plan_ship(
             state, plan_id=pid,
             message=message, include=include, exclude=exclude,
-            to=to, open_pr=pr, merge=merge,
+            files=files, to=to, open_pr=pr, merge=merge,
         )
         _get_store().save(plan)
         return plan.to_dict()

@@ -203,6 +203,22 @@ class GitLabPlatform(Platform):
             return None
         return _parse_gl_issue(data)
 
+    def pr_comment(self, pr_number: int, body: str) -> dict[str, str]:
+        """Post a comment on an MR. Not yet implemented for GitLab."""
+        raise NotImplementedError("pr_comment not yet implemented for GitLab")
+
+    def pr_review(self, pr_number: int, body: str, event: str) -> dict[str, str]:
+        """Submit an MR review. Not yet implemented for GitLab."""
+        raise NotImplementedError("pr_review not yet implemented for GitLab")
+
+    def pr_comments(self, pr_number: int) -> list[dict[str, str]]:
+        """Read comments on an MR. Not yet implemented for GitLab."""
+        raise NotImplementedError("pr_comments not yet implemented for GitLab")
+
+    def issue_close(self, number: int, comment: str | None = None, reason: str = "completed") -> dict[str, str]:
+        """Close an issue. Not yet implemented for GitLab."""
+        raise NotImplementedError("issue_close not yet implemented for GitLab")
+
 
 def mr_number_to_iid(number: int) -> int:
     """GitLab uses iid (project-scoped) for MR references. glab accepts iid directly."""

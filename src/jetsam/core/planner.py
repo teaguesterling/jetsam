@@ -103,7 +103,7 @@ def plan_sync(
         warnings.append("Working tree is dirty — changes will be stashed during sync")
         steps.append(PlanStep(action="stash", params={"message": "jetsam sync auto-stash"}))
 
-    # Fast path: default branch, ahead only, clean working tree, no explicit strategy
+    # Fast path: default branch, ahead only, no staged/unstaged changes, no explicit strategy
     is_default = state.branch == state.default_branch
     if is_default and state.ahead > 0 and state.behind == 0 and not needs_stash and strategy is None:
         steps.append(

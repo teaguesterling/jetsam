@@ -121,7 +121,7 @@ def execute_plan(plan: Plan, cwd: str | None = None) -> ExecutionResult:
 
     results: list[StepResult] = []
     for step in plan.steps:
-        result = _execute_step(step, cwd=cwd)
+        result = _execute_step(step, cwd=cwd, prior_results=results)
         results.append(result)
         if not result.ok:
             return ExecutionResult(
@@ -137,7 +137,9 @@ def execute_plan(plan: Plan, cwd: str | None = None) -> ExecutionResult:
     )
 
 
-def _execute_step(step: PlanStep, cwd: str | None = None) -> StepResult:
+def _execute_step(
+    step: PlanStep, cwd: str | None = None, prior_results: list[StepResult] | None = None,
+) -> StepResult:
     """Execute a single plan step."""
     executor = _STEP_EXECUTORS.get(step.action)
     if executor is None:
@@ -146,7 +148,13 @@ def _execute_step(step: PlanStep, cwd: str | None = None) -> StepResult:
             ok=False,
             error=f"Unknown step action: {step.action}",
         )
-    result = executor(step, cwd)
+
+    # Some steps inspect earlier results (e.g. stash_pop checks if stash
+    # actually stored anything). Register such actions in _STEPS_NEEDING_PRIOR.
+    if step.action in _STEPS_NEEDING_PRIOR:
+        result = executor(step, cwd, prior_results=prior_results)
+    else:
+        result = executor(step, cwd)
 
     # Add recovery suggestion for failed steps
     if not result.ok and result.error:
@@ -229,18 +237,32 @@ def _exec_merge(step: PlanStep, cwd: str | None) -> StepResult:
     return StepResult(step="merge", ok=False, error=result.stderr.strip())
 
 
+def _stash_ref(cwd: str | None) -> str | None:
+    """Return the current stash tip SHA, or None if the stash is empty."""
+    ref = run_git_sync(["rev-parse", "--verify", "--quiet", "refs/stash"], cwd=cwd)
+    return ref.stdout.strip() if ref.ok else None
+
+
 def _exec_stash(step: PlanStep, cwd: str | None) -> StepResult:
     message = step.params.get("message", "")
+    ref_before = _stash_ref(cwd)
     args = ["stash", "push"]
     if message:
         args.extend(["-m", message])
     result = run_git_sync(args, cwd=cwd)
     if result.ok:
-        return StepResult(step="stash", ok=True)
+        actually_stashed = _stash_ref(cwd) != ref_before
+        return StepResult(step="stash", ok=True, details={"stashed": actually_stashed})
     return StepResult(step="stash", ok=False, error=result.stderr.strip())
 
 
-def _exec_stash_pop(step: PlanStep, cwd: str | None) -> StepResult:
+def _exec_stash_pop(
+    step: PlanStep, cwd: str | None, *, prior_results: list[StepResult] | None = None,
+) -> StepResult:
+    # Check if a prior stash step actually stashed anything
+    for r in prior_results or []:
+        if r.step == "stash" and not r.details.get("stashed", True):
+            return StepResult(step="stash_pop", ok=True, details={"skipped": True})
     result = run_git_sync(["stash", "pop"], cwd=cwd)
     if result.ok:
         return StepResult(step="stash_pop", ok=True)
@@ -482,3 +504,6 @@ _STEP_EXECUTORS = {
     "push_tag": _exec_push_tag,
     "release_create": _exec_release_create,
 }
+
+# Steps whose executors accept prior_results kwarg (see _execute_step).
+_STEPS_NEEDING_PRIOR: set[str] = {"stash_pop"}

@@ -358,14 +358,16 @@ def _exec_worktree_add(step: PlanStep, cwd: str | None) -> StepResult:
     branch = step.params.get("branch", "")
     base = step.params.get("base", "HEAD")
 
-    # Determine worktree path — use .worktrees/ directory beside repo root
+    # Determine worktree path from config
+    from jetsam.config.manager import load_config
     from jetsam.core.state import build_state
 
     state = build_state(cwd=cwd)
     repo_root = state.repo_root or "."
+    config = load_config(repo_root)
     import os
 
-    wt_dir = os.path.join(repo_root, ".worktrees")
+    wt_dir = os.path.join(repo_root, config.worktree_dir)
     wt_path = os.path.join(wt_dir, branch)
 
     args = ["worktree", "add", "-b", branch, wt_path, base]

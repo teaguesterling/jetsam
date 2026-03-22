@@ -20,6 +20,7 @@ class JetsamConfig:
     branch_prefix: str = ""
     delete_on_merge: bool = True
     worktree: str = "auto"  # auto | always | never
+    worktree_dir: str = ".worktrees"  # relative to repo root
     commit_message: str = "heuristic"  # heuristic | prompt | llm
 
     # Runtime state (not from config file)

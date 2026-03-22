@@ -3,9 +3,10 @@
 These tests mock the gh CLI to avoid requiring authentication.
 """
 
+import pytest
 from unittest.mock import patch
 
-from jetsam.platforms.github import GitHubPlatform, _normalize_check_status, _parse_pr
+from jetsam.platforms.github import GitHubPlatform, PlatformError, _normalize_check_status, _parse_pr
 
 
 class TestParsepr:
@@ -108,3 +109,106 @@ class TestGitHubPlatform:
             assert len(checks) == 2
             assert checks[0].status == "pass"
             assert checks[1].status == "fail"
+
+
+class TestPrComment:
+    def test_success(self):
+        platform = GitHubPlatform()
+        with patch.object(platform, "_run_gh", return_value=(True, "https://github.com/u/r/pull/42#issuecomment-123", "")):
+            result = platform.pr_comment(42, "Looks good!")
+            assert result["number"] == "42"
+            assert "url" in result
+
+    def test_failure(self):
+        platform = GitHubPlatform()
+        with patch.object(platform, "_run_gh", return_value=(False, "", "not found")):
+            with pytest.raises(PlatformError):
+                platform.pr_comment(42, "comment")
+
+
+class TestPrReview:
+    def test_approve(self):
+        platform = GitHubPlatform()
+        with patch.object(platform, "_run_gh", return_value=(True, "", "")):
+            result = platform.pr_review(42, "", "approve")
+            assert result["event"] == "approve"
+
+    def test_request_changes(self):
+        platform = GitHubPlatform()
+        with patch.object(platform, "_run_gh", return_value=(True, "", "")):
+            result = platform.pr_review(42, "Fix the bug", "request-changes")
+            assert result["event"] == "request-changes"
+
+    def test_failure(self):
+        platform = GitHubPlatform()
+        with patch.object(platform, "_run_gh", return_value=(False, "", "error")):
+            with pytest.raises(PlatformError):
+                platform.pr_review(42, "comment", "approve")
+
+
+class TestPrComments:
+    def test_returns_merged_comments(self):
+        platform = GitHubPlatform()
+        issue_comments = [
+            {"user": {"login": "alice"}, "body": "Nice", "created_at": "2026-01-01T00:00:00Z"},
+        ]
+        review_comments = [
+            {"user": {"login": "bob"}, "body": "LGTM", "submitted_at": "2026-01-02T00:00:00Z", "state": "APPROVED"},
+        ]
+        with patch.object(platform, "_run_gh_json", side_effect=[
+            (True, issue_comments),
+            (True, review_comments),
+        ]):
+            result = platform.pr_comments(42)
+            assert len(result) == 2
+            assert result[0]["author"] == "alice"
+            assert result[0]["type"] == "comment"
+            assert result[1]["author"] == "bob"
+            assert result[1]["type"] == "review"
+
+    def test_empty(self):
+        platform = GitHubPlatform()
+        with patch.object(platform, "_run_gh_json", side_effect=[
+            (True, []),
+            (True, []),
+        ]):
+            result = platform.pr_comments(42)
+            assert result == []
+
+    def test_api_failure_returns_empty(self):
+        platform = GitHubPlatform()
+        with patch.object(platform, "_run_gh_json", side_effect=[
+            (False, "error"),
+            (False, "error"),
+        ]):
+            result = platform.pr_comments(42)
+            assert result == []
+
+
+class TestIssueClose:
+    def test_close_simple(self):
+        platform = GitHubPlatform()
+        with patch.object(platform, "_run_gh", return_value=(True, "", "")):
+            result = platform.issue_close(42)
+            assert result["number"] == "42"
+            assert result["state"] == "closed"
+
+    def test_close_with_comment(self):
+        platform = GitHubPlatform()
+        with patch.object(platform, "_run_gh", return_value=(True, "", "")) as mock:
+            result = platform.issue_close(42, comment="Fixed in #10")
+            assert mock.call_count == 2
+            assert result["state"] == "closed"
+
+    def test_close_not_planned(self):
+        platform = GitHubPlatform()
+        with patch.object(platform, "_run_gh", return_value=(True, "", "")) as mock:
+            result = platform.issue_close(42, reason="not-planned")
+            close_call = mock.call_args_list[-1]
+            assert "not-planned" in close_call[0][0]
+
+    def test_close_failure(self):
+        platform = GitHubPlatform()
+        with patch.object(platform, "_run_gh", return_value=(False, "", "not found")):
+            with pytest.raises(PlatformError):
+                platform.issue_close(999)

@@ -197,6 +197,74 @@ class GitHubPlatform(Platform):
             return None
         return _parse_issue(data)
 
+    def pr_comment(self, pr_number: int, body: str) -> dict[str, str]:
+        """Post a comment on a PR."""
+        ok, stdout, stderr = self._run_gh([
+            "pr", "comment", str(pr_number), "--body", body,
+        ])
+        if not ok:
+            raise PlatformError(f"Failed to comment on PR #{pr_number}: {stderr.strip()}")
+        return {"number": str(pr_number), "url": stdout.strip()}
+
+    def pr_review(self, pr_number: int, body: str, event: str) -> dict[str, str]:
+        """Submit a PR review."""
+        args = ["pr", "review", str(pr_number), f"--{event}"]
+        if body:
+            args.extend(["--body", body])
+        ok, stdout, stderr = self._run_gh(args)
+        if not ok:
+            raise PlatformError(f"Failed to review PR #{pr_number}: {stderr.strip()}")
+        return {"number": str(pr_number), "event": event, "url": stdout.strip()}
+
+    def pr_comments(self, pr_number: int) -> list[dict[str, str]]:
+        """Read comments and reviews on a PR."""
+        comments: list[dict[str, str]] = []
+
+        # Issue comments (regular comments)
+        ok, data = self._run_gh_json([
+            "api", f"repos/{{owner}}/{{repo}}/issues/{pr_number}/comments",
+        ])
+        if ok and isinstance(data, list):
+            for item in data:
+                user = item.get("user", {})
+                comments.append({
+                    "author": user.get("login", "") if isinstance(user, dict) else "",
+                    "body": item.get("body", ""),
+                    "created_at": item.get("created_at", ""),
+                    "type": "comment",
+                })
+
+        # Review comments
+        ok2, data2 = self._run_gh_json([
+            "api", f"repos/{{owner}}/{{repo}}/pulls/{pr_number}/reviews",
+        ])
+        if ok2 and isinstance(data2, list):
+            for item in data2:
+                user = item.get("user", {})
+                comments.append({
+                    "author": user.get("login", "") if isinstance(user, dict) else "",
+                    "body": item.get("body", ""),
+                    "created_at": item.get("submitted_at", ""),
+                    "type": "review",
+                })
+
+        comments.sort(key=lambda c: c.get("created_at", ""))
+        return comments
+
+    def issue_close(self, number: int, comment: str | None = None, reason: str = "completed") -> dict[str, str]:
+        """Close an issue, optionally with a comment."""
+        if comment:
+            ok, _, stderr = self._run_gh(["issue", "comment", str(number), "--body", comment])
+            if not ok:
+                raise PlatformError(f"Failed to comment on issue #{number}: {stderr.strip()}")
+
+        args = ["issue", "close", str(number), "--reason", reason]
+        ok, _, stderr = self._run_gh(args)
+        if not ok:
+            raise PlatformError(f"Failed to close issue #{number}: {stderr.strip()}")
+
+        return {"number": str(number), "state": "closed", "reason": reason}
+
     def is_available(self) -> bool:
         """Check if gh is installed and authenticated."""
         ok, _, _ = self._run_gh(["auth", "status"])

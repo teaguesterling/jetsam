@@ -46,6 +46,17 @@ Test improvements and developer experience.
 | [P8-002](P8-002-negative-path-platform-tests.md) | Add negative path tests for platforms | ~200 lines |
 | [P8-003](P8-003-add-structured-logging.md) | Add structured logging to stderr | ~80 lines |
 
+## Phase 9 — Bug Fixes (Reported Issues)
+
+Fixes for bugs reported via GitHub issues.
+
+| Task | Description | Issue | Effort |
+|------|-------------|-------|--------|
+| [P9-001](P9-001-fix-stash-pop-when-nothing-stashed.md) | Fix stash_pop failure when nothing was stashed | [#5](https://github.com/teaguesterling/jetsam/issues/5) | ~15-25 lines |
+| [P9-002](P9-002-ship-files-parameter.md) | Add `files` parameter to `ship` verb | [#4](https://github.com/teaguesterling/jetsam/issues/4) | ~5 lines |
+| [P9-003](P9-003-fix-sync-stale-plan-from-fetch.md) | Fix stale plan error when fetch changes repo state | [#2](https://github.com/teaguesterling/jetsam/issues/2) | ~10-20 lines |
+| [P9-004](P9-004-simplify-sync-on-default-branch.md) | Simplify sync plan on default branch | [#3](https://github.com/teaguesterling/jetsam/issues/3) | ~20-30 lines |
+
 ## Dependency Graph
 
 ```
@@ -61,4 +72,10 @@ P6-004 ──── no dependencies
 P7-002 ──── no dependencies
 P8-001 ──── no dependencies
 P8-003 ──── no dependencies
+
+P9-001 ──── no dependencies
+P9-002 ──── no dependencies
+P9-003 ──── no dependencies
+P9-001 ←── P9-004 (stash fix should land first)
+P9-003 ←── P9-004 (stale plan fix should land first)
 ```

@@ -137,8 +137,12 @@ Full pipeline: stage, commit, push, and open a PR.
 
 ```bash
 jetsam ship [-m MESSAGE] [--to BRANCH] [--no-pr] [--merge]
-            [--include GLOB] [--exclude GLOB]
+            [--include GLOB] [--exclude GLOB] [FILES...]
 ```
+
+**Arguments:**
+
+: `FILES` — Optional explicit file paths to stage (stages exactly these files).
 
 **Options:**
 
@@ -156,12 +160,16 @@ jetsam ship [-m MESSAGE] [--to BRANCH] [--no-pr] [--merge]
 - Pushes to the remote (sets upstream if needed)
 - Creates a new PR, or notes the existing one was updated via push
 - Optionally merges the PR
+- If nothing to commit but there are unpushed commits, skips straight to push/PR
 
 **Examples:**
 
 ```bash
 # Ship everything with a message
 jetsam ship -m "add dark mode"
+
+# Ship specific files only
+jetsam ship -m "fix parser" src/parser.py tests/test_parser.py
 
 # Ship without creating a PR
 jetsam ship -m "update config" --no-pr
@@ -171,6 +179,9 @@ jetsam ship -m "hotfix" --merge
 
 # Ship to a specific branch
 jetsam ship -m "backport" --to release/v2
+
+# Push already-committed changes and open a PR
+jetsam ship
 ```
 
 (switch)=

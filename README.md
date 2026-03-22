@@ -75,7 +75,7 @@ All workflow verbs (`save`, `sync`, `ship`, `switch`, `start`, `finish`, `tidy`,
 
 **save** `[-m MESSAGE] [--include GLOB] [--exclude GLOB] [FILES...]`
 
-**ship** `[-m MESSAGE] [--to BRANCH] [--no-pr] [--merge] [--include GLOB] [--exclude GLOB]`
+**ship** `[-m MESSAGE] [--to BRANCH] [--no-pr] [--merge] [--include GLOB] [--exclude GLOB] [FILES...]`
 
 **sync** `[--strategy rebase|merge]`
 

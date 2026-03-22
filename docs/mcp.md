@@ -52,7 +52,7 @@ The workflow is: **call tool** → **inspect/modify plan** → **confirm or canc
 |---|---|
 | `save` | Stage and commit changes |
 | `sync` | Fetch, rebase/merge, push |
-| `ship` | Stage, commit, push, open PR |
+| `ship` | Stage, commit, push, open PR (skips commit if nothing to commit) |
 | `switch` | Switch branches (stash-aware) |
 | `start` | Begin work on issue/feature |
 | `finish` | Merge PR and clean up |

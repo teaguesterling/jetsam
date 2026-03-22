@@ -101,15 +101,41 @@ def plan_sync(
     steps: list[PlanStep] = []
     warnings: list[str] = []
 
-    if state.dirty:
+    needs_stash = bool(state.staged or state.unstaged)
+
+    if needs_stash:
         warnings.append("Working tree is dirty — changes will be stashed during sync")
         steps.append(PlanStep(action="stash", params={"message": "jetsam sync auto-stash"}))
 
+    # Fast path: default branch, ahead only, no staged/unstaged changes, no explicit strategy
+    is_default = state.branch == state.default_branch
+    fast_path = (
+        is_default and state.ahead > 0 and state.behind == 0
+        and not needs_stash and strategy is None
+    )
+    if fast_path:
+        steps.append(
+            PlanStep(
+                action="push",
+                params={
+                    "branch": state.branch,
+                    "remote": "origin",
+                    "set_upstream": state.upstream is None,
+                },
+            )
+        )
+        return Plan(
+            plan_id=plan_id,
+            verb="sync",
+            steps=steps,
+            state_hash=state.compute_hash(exclude_remote_tracking=True),
+            exclude_remote_tracking=True,
+            warnings=warnings,
+            params={"strategy": strategy},
+        )
+
     # Fetch
     steps.append(PlanStep(action="fetch", params={"remote": "origin"}))
-
-    # Rebase or merge
-    is_default = state.branch == state.default_branch
     actual_strategy = strategy or ("merge" if is_default else "rebase")
 
     if state.upstream:
@@ -146,7 +172,7 @@ def plan_sync(
             )
         )
 
-    if state.dirty:
+    if needs_stash:
         steps.append(PlanStep(action="stash_pop"))
 
     return Plan(

@@ -139,6 +139,76 @@ class TestPlanSync:
         d = plan.to_dict()
         assert d["exclude_remote_tracking"] is True
 
+    def test_default_branch_ahead_only_fast_path(self):
+        """Default branch, ahead only, clean tree → just push."""
+        state = _make_state(
+            branch="main", upstream="origin/main", dirty=False,
+            staged=[], unstaged=[], untracked=[], ahead=1, behind=0,
+        )
+        plan = plan_sync(state, plan_id="p_test")
+        actions = [s.action for s in plan.steps]
+        assert actions == ["push"]
+
+    def test_default_branch_untracked_only_fast_path(self):
+        """Untracked-only dirty state should not trigger stash, still takes fast path."""
+        state = _make_state(
+            branch="main", upstream="origin/main", dirty=True,
+            staged=[], unstaged=[], untracked=["scratch.txt"], ahead=1, behind=0,
+        )
+        plan = plan_sync(state, plan_id="p_test")
+        actions = [s.action for s in plan.steps]
+        assert actions == ["push"]
+        assert "stash" not in actions
+
+    def test_default_branch_ahead_and_behind_full_plan(self):
+        """Default branch, ahead and behind → full plan with fetch/merge."""
+        state = _make_state(
+            branch="main", upstream="origin/main", dirty=False,
+            staged=[], unstaged=[], untracked=[], ahead=1, behind=2,
+        )
+        plan = plan_sync(state, plan_id="p_test")
+        actions = [s.action for s in plan.steps]
+        assert "fetch" in actions
+        assert "merge" in actions
+        assert "push" in actions
+
+    def test_default_branch_ahead_with_staged_changes(self):
+        """Default branch with staged changes → full plan with stash."""
+        state = _make_state(
+            branch="main", upstream="origin/main", dirty=True,
+            staged=["file.py"], unstaged=[], untracked=[], ahead=1, behind=0,
+        )
+        plan = plan_sync(state, plan_id="p_test")
+        actions = [s.action for s in plan.steps]
+        assert actions[0] == "stash"
+        assert actions[-1] == "stash_pop"
+        assert "fetch" in actions
+        assert "merge" in actions
+        assert "push" in actions
+
+    def test_default_branch_explicit_strategy_skips_fast_path(self):
+        """Explicit strategy on default branch bypasses fast path."""
+        state = _make_state(
+            branch="main", upstream="origin/main", dirty=False,
+            staged=[], unstaged=[], untracked=[], ahead=1, behind=0,
+        )
+        plan = plan_sync(state, plan_id="p_test", strategy="merge")
+        actions = [s.action for s in plan.steps]
+        assert "fetch" in actions
+        assert "merge" in actions
+
+    def test_default_branch_not_ahead_no_fast_path(self):
+        """Default branch, not ahead → normal path (no fast path)."""
+        state = _make_state(
+            branch="main", upstream="origin/main", dirty=False,
+            staged=[], unstaged=[], untracked=[], ahead=0, behind=0,
+        )
+        plan = plan_sync(state, plan_id="p_test")
+        actions = [s.action for s in plan.steps]
+        assert "fetch" in actions
+        assert "merge" in actions
+        assert "push" not in actions
+
 
 class TestPlanFinish:
     def test_finish_hash_stable_when_ahead_behind_change(self):

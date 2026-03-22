@@ -1,6 +1,6 @@
 """Tests for plan generation."""
 
-from jetsam.core.planner import plan_save, plan_ship, plan_sync
+from jetsam.core.planner import plan_finish, plan_save, plan_ship, plan_sync
 from jetsam.core.state import RepoState
 
 
@@ -131,6 +131,30 @@ class TestPlanSync:
         plan2 = plan_sync(state2, plan_id="p_test")
 
         assert plan1.state_hash != plan2.state_hash
+
+    def test_sync_to_dict_includes_exclude_remote_tracking(self):
+        """Sync plan's to_dict should include exclude_remote_tracking."""
+        state = _make_state(dirty=False)
+        plan = plan_sync(state, plan_id="p_test")
+        d = plan.to_dict()
+        assert d["exclude_remote_tracking"] is True
+
+
+class TestPlanFinish:
+    def test_finish_hash_stable_when_ahead_behind_change(self):
+        """Finish plan hash should NOT change when only ahead/behind change.
+
+        plan_finish includes a fetch step, so it has the same race condition
+        as plan_sync.
+        """
+        state1 = _make_state(ahead=0, behind=0, dirty=False)
+        plan1 = plan_finish(state1, plan_id="p_test")
+
+        state2 = _make_state(ahead=0, behind=3, dirty=False)
+        plan2 = plan_finish(state2, plan_id="p_test")
+
+        assert plan1.state_hash == plan2.state_hash
+        assert plan1.exclude_remote_tracking is True
 
 
 class TestPlanShip:

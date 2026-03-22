@@ -69,9 +69,10 @@ class RepoState:
     ) -> str:
         """Compute a hash of the state for plan validation.
 
-        If scope is provided, only hash state related to those files.
-        If exclude_remote_tracking is True, omit ahead/behind from the hash.
-        This is used by sync plans where fetch legitimately changes these values.
+        If scope is provided, only hash state related to those files
+        (ahead/behind are never included in scoped hashes).
+        If exclude_remote_tracking is True, omit ahead/behind from unscoped hashes.
+        This is used by sync/finish plans where fetch legitimately changes these values.
         """
         data: dict[str, object]
         if scope:

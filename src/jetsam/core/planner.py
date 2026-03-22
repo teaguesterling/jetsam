@@ -35,12 +35,15 @@ class Plan:
     params: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "plan_id": self.plan_id,
             "verb": self.verb,
             "steps": [s.to_dict() for s in self.steps],
             "warnings": self.warnings,
         }
+        if self.exclude_remote_tracking:
+            d["exclude_remote_tracking"] = True
+        return d
 
 
 def plan_save(
@@ -386,7 +389,8 @@ def plan_finish(
             plan_id=plan_id,
             verb="finish",
             steps=[],
-            state_hash=state.compute_hash(),
+            state_hash=state.compute_hash(exclude_remote_tracking=True),
+            exclude_remote_tracking=True,
             warnings=warnings,
             params={"strategy": strategy, "no_delete": no_delete},
         )
@@ -432,7 +436,8 @@ def plan_finish(
         plan_id=plan_id,
         verb="finish",
         steps=steps,
-        state_hash=state.compute_hash(),
+        state_hash=state.compute_hash(exclude_remote_tracking=True),
+        exclude_remote_tracking=True,
         warnings=warnings,
         params={
             "branch": state.branch,

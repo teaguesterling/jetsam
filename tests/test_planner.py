@@ -281,3 +281,63 @@ class TestPlanShip:
         assert d["plan_id"] == "p_test"
         assert isinstance(d["steps"], list)
         assert all(isinstance(s, dict) for s in d["steps"])
+
+    def test_files_parameter(self):
+        """ship with files= scopes staging to listed files only."""
+        state = _make_state(unstaged=["a.py", "b.py", "c.py"])
+        plan = plan_ship(
+            state, plan_id="p_test", message="ship",
+            files=["a.py"],
+        )
+        stage_step = next(s for s in plan.steps if s.action == "stage")
+        assert stage_step.params["files"] == ["a.py"]
+
+    def test_nothing_to_commit_push_only(self):
+        """ship with nothing to commit but ahead>0 generates push-only plan."""
+        state = _make_state(
+            staged=[], unstaged=[], untracked=[], dirty=False, ahead=2,
+        )
+        plan = plan_ship(state, plan_id="p_test", message="ship", open_pr=False)
+        actions = [s.action for s in plan.steps]
+        assert "stage" not in actions
+        assert "commit" not in actions
+        assert "push" in actions
+
+    def test_nothing_to_commit_with_pr(self):
+        """ship with nothing to commit, ahead>0, open_pr=True generates push+PR."""
+        state = _make_state(
+            staged=[], unstaged=[], untracked=[], dirty=False, ahead=2,
+        )
+        plan = plan_ship(state, plan_id="p_test", message="ship")
+        actions = [s.action for s in plan.steps]
+        assert "commit" not in actions
+        assert "push" in actions
+        assert "pr_create" in actions
+
+    def test_nothing_to_commit_or_push_warns(self):
+        """ship with nothing to commit, ahead=0, no PR returns warning."""
+        state = _make_state(
+            staged=[], unstaged=[], untracked=[], dirty=False, ahead=0,
+        )
+        plan = plan_ship(state, plan_id="p_test", message="ship", open_pr=False)
+        assert any("nothing" in w.lower() for w in plan.warnings)
+        assert len(plan.steps) == 0
+
+    def test_nothing_to_commit_ahead_zero_pr_only(self):
+        """ship with nothing to commit, ahead=0, but PR requested creates PR."""
+        state = _make_state(
+            staged=[], unstaged=[], untracked=[], dirty=False, ahead=0,
+        )
+        plan = plan_ship(state, plan_id="p_test", message="ship", open_pr=True)
+        actions = [s.action for s in plan.steps]
+        assert "commit" not in actions
+        assert "pr_create" in actions
+
+    def test_files_empty_list_same_as_none(self):
+        """ship with files=[] behaves same as files=None."""
+        state = _make_state()
+        plan_with_none = plan_ship(state, plan_id="p1", message="ship", files=None)
+        plan_with_empty = plan_ship(state, plan_id="p2", message="ship", files=[])
+        actions_none = [s.action for s in plan_with_none.steps]
+        actions_empty = [s.action for s in plan_with_empty.steps]
+        assert actions_none == actions_empty

@@ -200,6 +200,7 @@ def plan_ship(
     message: str | None = None,
     include: str | None = None,
     exclude: str | None = None,
+    files: list[str] | None = None,
     to: str | None = None,
     open_pr: bool = True,
     merge: bool = False,
@@ -210,13 +211,14 @@ def plan_ship(
     target_branch = to or state.default_branch
 
     # Stage files
-    target_files = _resolve_files(state, include, exclude)
+    target_files = _resolve_files(state, include, exclude, files)
     if target_files:
         steps.append(PlanStep(action="stage", params={"files": target_files}))
 
-    # Commit
-    all_staged = list(set(state.staged + target_files))
-    if all_staged or state.dirty:
+    # Commit — only if there's something to commit
+    has_something_to_commit = bool(target_files or state.staged)
+    if has_something_to_commit:
+        all_staged = list(set(state.staged + target_files))
         if not message:
             message = _generate_message_heuristic(all_staged)
         steps.append(
@@ -228,17 +230,18 @@ def plan_ship(
     elif not message:
         message = ""
 
-    # Push
-    steps.append(
-        PlanStep(
-            action="push",
-            params={
-                "branch": state.branch,
-                "remote": "origin",
-                "set_upstream": state.upstream is None,
-            },
+    # Push — if there are commits to push or we just committed
+    if has_something_to_commit or state.ahead > 0:
+        steps.append(
+            PlanStep(
+                action="push",
+                params={
+                    "branch": state.branch,
+                    "remote": "origin",
+                    "set_upstream": state.upstream is None,
+                },
+            )
         )
-    )
 
     # PR
     if open_pr:
@@ -272,6 +275,9 @@ def plan_ship(
                 )
             )
 
+    if not steps:
+        warnings.append("Nothing to commit or push")
+
     # Warnings
     if state.behind > 0:
         warnings.append(
@@ -290,6 +296,7 @@ def plan_ship(
             "message": message,
             "include": include,
             "exclude": exclude,
+            "files": files,
             "to": to,
             "open_pr": open_pr,
             "merge": merge,

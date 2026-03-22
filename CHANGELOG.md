@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.3.0
+
+Rollup release consolidating agent adoption improvements and bug fixes.
+See v0.2.0 and v0.2.1 entries below for details.
+
 ## v0.2.1
 
 ### Bug fixes

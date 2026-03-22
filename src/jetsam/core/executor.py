@@ -149,8 +149,9 @@ def _execute_step(
             error=f"Unknown step action: {step.action}",
         )
 
-    # Steps that need prior results
-    if step.action == "stash_pop":
+    # Some steps inspect earlier results (e.g. stash_pop checks if stash
+    # actually stored anything). Register such actions in _STEPS_NEEDING_PRIOR.
+    if step.action in _STEPS_NEEDING_PRIOR:
         result = executor(step, cwd, prior_results=prior_results)
     else:
         result = executor(step, cwd)
@@ -503,3 +504,6 @@ _STEP_EXECUTORS = {
     "push_tag": _exec_push_tag,
     "release_create": _exec_release_create,
 }
+
+# Steps whose executors accept prior_results kwarg (see _execute_step).
+_STEPS_NEEDING_PRIOR: set[str] = {"stash_pop"}

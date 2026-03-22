@@ -171,6 +171,20 @@ class TestStashNoOp:
         assert result.ok is True
         assert result.details.get("skipped") is not True
 
+    def test_stash_pop_without_prior_results_attempts_pop(self, dirty_git_repo: Path):
+        """When prior_results is None, stash_pop should attempt the pop (backward compat)."""
+        cwd = str(dirty_git_repo)
+        # Stash something so pop will succeed
+        stash_step = PlanStep(action="stash", params={"message": "test"})
+        stash_result = _exec_stash(stash_step, cwd)
+        assert stash_result.details["stashed"] is True
+
+        pop_step = PlanStep(action="stash_pop")
+        # No prior_results passed — should still attempt the pop
+        result = _exec_stash_pop(pop_step, cwd)
+        assert result.ok is True
+        assert result.details.get("skipped") is not True
+
     def test_stash_pop_skips_in_plan_when_nothing_stashed(self, tmp_git_repo: Path):
         """Full plan with stash+stash_pop succeeds when nothing was actually stashed."""
         cwd = str(tmp_git_repo)

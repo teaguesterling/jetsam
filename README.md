@@ -92,19 +92,25 @@ All workflow verbs (`save`, `sync`, `ship`, `switch`, `start`, `finish`, `tidy`,
 Jetsam includes a built-in MCP server for agent integration:
 
 ```bash
-# Start the MCP server
-jetsam serve
+# Full agent setup: MCP config + routing instructions + warning hooks
+jetsam init --mcp --agents claude --hooks claude
 
-# Or initialize with .mcp.json
+# Or just the MCP server config
 jetsam init --mcp
 ```
 
-This creates `.mcp.json` in the repo root for automatic discovery by Claude Code
-and other MCP-aware tools. The MCP tools mirror CLI verbs with a plan → confirm flow:
+This creates `.mcp.json` for automatic MCP discovery, `CLAUDE.md` with a routing
+table that teaches agents to use jetsam tools instead of raw git/gh, and warning
+hooks that alert agents when they bypass jetsam.
+
+The MCP tools mirror CLI verbs with a plan → confirm flow:
 
 1. Call a workflow tool (e.g. `save`, `ship`, `release`) — returns a plan
 2. Optionally call `modify_plan` to adjust the plan
 3. Call `confirm` to execute, or `cancel` to discard
+
+Additional MCP tools for PR interaction: `pr_comment`, `pr_review`,
+`pr_comments`, `issue_close`.
 
 ## Shell aliases
 

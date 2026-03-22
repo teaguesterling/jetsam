@@ -79,8 +79,12 @@ These tools return results directly without creating plans.
 | `diff` | Diff (stat or full) |
 | `pr_view` | PR details for a branch |
 | `pr_list` | List pull requests |
+| `pr_comment` | Post a comment on a PR |
+| `pr_review` | Submit a PR review (approve/request-changes/comment) |
+| `pr_comments` | Read comments and reviews on a PR |
 | `checks` | CI check status |
 | `issues` | List issues |
+| `issue_close` | Close an issue with optional comment |
 | `git` | Pass-through any git command |
 
 ## Agent workflow example

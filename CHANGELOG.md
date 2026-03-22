@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.2.0
+
+### New MCP tools
+- **pr_comment** — post a comment on a pull request
+- **pr_review** — submit a PR review (approve, request-changes, comment)
+- **pr_comments** — read comments and reviews on a PR
+- **issue_close** — close an issue with optional comment and reason
+
+### Agent adoption improvements
+- `init --agents claude|gemini|agents|none|<path>` — generate agent instruction
+  files (CLAUDE.md, GEMINI.md, etc.) with JetSam routing table
+- `init --hooks claude|none` — generate Claude Code warning hooks that alert
+  agents when they use raw git/gh commands instead of JetSam tools
+
+### Bug fixes
+- Fix stash_pop failure when nothing was stashed (#5)
+- Fix stale plan error when fetch changes repo state (#2)
+- Simplify sync plan on default branch — fast path for push-only (#3)
+
+### Developer experience
+- Resolve all mypy strict errors (14 → 0)
+- Type `_get_platform` return as `Platform | None` instead of `Any`
+
 ## v0.1.1
 
 - Document `auto_push` and `commit_message` configuration options

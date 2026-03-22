@@ -83,10 +83,38 @@ This appends aliases to your shell config (`~/.bashrc`, `~/.zshrc`, or
 The aliases are guarded by a marker comment, so running `init --aliases` again
 is safe — it won't duplicate them.
 
-You can also combine flags:
+### Agent instruction files
+
+Generate a routing table that teaches AI agents to use jetsam instead of raw
+git/gh commands:
 
 ```bash
-jetsam init --mcp --aliases
+jetsam init --agents claude
+```
+
+This creates (or updates) `CLAUDE.md` with a table mapping git/gh commands to
+jetsam MCP tools. Use `gemini` for `GEMINI.md`, `agents` for `AGENTS.md`, or
+pass a custom path. Re-running is safe — content between `<!-- jetsam:start -->`
+and `<!-- jetsam:end -->` markers is replaced without touching other content.
+
+### Warning hooks
+
+Generate Claude Code hooks that warn when agents use raw git/gh through Bash:
+
+```bash
+jetsam init --hooks claude
+```
+
+This creates `.claude/hooks/jetsam-warn.sh` and adds a `PreToolUse` hook to
+`.claude/settings.json`. The hook warns but does not block — agents can still
+use raw commands when needed.
+
+### Combining flags
+
+All init flags are independent and can be combined:
+
+```bash
+jetsam init --mcp --agents claude --hooks claude --aliases
 ```
 
 ## First workflow

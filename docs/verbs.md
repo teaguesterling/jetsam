@@ -410,12 +410,30 @@ jetsam issues [--state open|closed|all] [--label LABEL]
 Initialize jetsam in the current repository.
 
 ```bash
-jetsam init [--mcp] [--aliases]
+jetsam init [--mcp] [--aliases] [--agents TARGET] [--hooks TARGET]
 ```
 
 **Options:**
 
 : `--mcp` — Add jetsam MCP server entry to `.mcp.json` (merges with existing file).
 : `--aliases` — Install shell aliases to your shell config.
+: `--agents TARGET` — Generate agent instructions file with JetSam routing table.
+  Values: `claude` (CLAUDE.md), `gemini` (GEMINI.md), `agents` (AGENTS.md),
+  `none` (skip), or a custom file path.
+: `--hooks TARGET` — Generate agent hook config for soft enforcement.
+  Values: `claude` (Claude Code PreToolUse hooks), `none` (skip).
+
+**Examples:**
+
+```bash
+# Full agent setup
+jetsam init --mcp --agents claude --hooks claude
+
+# MCP only (existing behavior)
+jetsam init --mcp
+
+# Agent instructions for a different framework
+jetsam init --agents gemini
+```
 
 See [Getting started](getting-started.md) for details.

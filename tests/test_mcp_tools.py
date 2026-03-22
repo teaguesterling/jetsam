@@ -198,3 +198,17 @@ class TestPlanWorkflow:
 
         store.delete(plan_id)
         assert store.load(plan_id) is None
+
+
+class TestNewToolsRegistration:
+    """Verify new tools register without errors."""
+
+    def test_register_includes_new_tools(self):
+        from mcp.server.fastmcp import FastMCP
+        mcp = FastMCP("test")
+        mcp_tools.register_tools(mcp)
+        tool_names = list(mcp._tool_manager._tools.keys())
+        assert "pr_comment" in tool_names
+        assert "pr_review" in tool_names
+        assert "pr_comments" in tool_names
+        assert "issue_close" in tool_names

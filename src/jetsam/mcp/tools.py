@@ -337,6 +337,110 @@ def register_tools(mcp: FastMCP) -> None:
         return [asdict(i) for i in issue_list]
 
     @mcp.tool()
+    def pr_comment(
+        body: str,
+        branch: str | None = None,
+        pr_number: int | None = None,
+    ) -> dict[str, Any]:
+        """Post a comment on a pull request.
+
+        Args:
+            body: Comment text.
+            branch: Branch to find PR for (default: current branch).
+            pr_number: PR number (overrides branch resolution).
+        """
+        repo_state = build_state()
+        platform = _get_platform(repo_state)
+        if platform is None:
+            return {"error": "no_platform", "message": "No platform configured"}
+
+        actual_pr = pr_number
+        if actual_pr is None:
+            actual_branch = branch or repo_state.branch
+            pr = platform.pr_for_branch(actual_branch)
+            if pr is None:
+                return {"error": "no_pr", "branch": actual_branch}
+            actual_pr = pr.number
+
+        return platform.pr_comment(actual_pr, body)
+
+    @mcp.tool()
+    def pr_review(
+        event: str,
+        body: str = "",
+        branch: str | None = None,
+        pr_number: int | None = None,
+    ) -> dict[str, Any]:
+        """Submit a PR review.
+
+        Args:
+            event: Review action: "approve", "request-changes", or "comment".
+            body: Review body text. Required for request-changes and comment.
+            branch: Branch to find PR for (default: current branch).
+            pr_number: PR number (overrides branch resolution).
+        """
+        repo_state = build_state()
+        platform = _get_platform(repo_state)
+        if platform is None:
+            return {"error": "no_platform", "message": "No platform configured"}
+
+        actual_pr = pr_number
+        if actual_pr is None:
+            actual_branch = branch or repo_state.branch
+            pr = platform.pr_for_branch(actual_branch)
+            if pr is None:
+                return {"error": "no_pr", "branch": actual_branch}
+            actual_pr = pr.number
+
+        return platform.pr_review(actual_pr, body, event)
+
+    @mcp.tool()
+    def pr_comments(
+        branch: str | None = None,
+        pr_number: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Read comments and reviews on a pull request.
+
+        Args:
+            branch: Branch to find PR for (default: current branch).
+            pr_number: PR number (overrides branch resolution).
+        """
+        repo_state = build_state()
+        platform = _get_platform(repo_state)
+        if platform is None:
+            return [{"error": "no_platform"}]
+
+        actual_pr = pr_number
+        if actual_pr is None:
+            actual_branch = branch or repo_state.branch
+            pr = platform.pr_for_branch(actual_branch)
+            if pr is None:
+                return [{"error": "no_pr", "branch": actual_branch}]
+            actual_pr = pr.number
+
+        return platform.pr_comments(actual_pr)
+
+    @mcp.tool()
+    def issue_close(
+        number: int,
+        comment: str | None = None,
+        reason: str = "completed",
+    ) -> dict[str, Any]:
+        """Close an issue, optionally with a comment.
+
+        Args:
+            number: Issue number.
+            comment: Optional comment to post before closing.
+            reason: Close reason: "completed" (default) or "not-planned".
+        """
+        repo_state = build_state()
+        platform = _get_platform(repo_state)
+        if platform is None:
+            return {"error": "no_platform", "message": "No platform configured"}
+
+        return platform.issue_close(number, comment=comment, reason=reason)
+
+    @mcp.tool()
     def release(
         tag: str,
         title: str | None = None,

@@ -220,10 +220,32 @@ def plan_ship(
     exclude: str | None = None,
     files: list[str] | None = None,
     to: str | None = None,
-    open_pr: bool = True,
-    merge: bool = False,
+    open_pr: bool | None = None,
+    merge: bool | None = None,
+    draft: bool | None = None,
+    config: JetsamConfig | None = None,
 ) -> Plan:
     """Generate a plan for the 'ship' verb (stage + commit + push + PR)."""
+    if config is None:
+        config = load_config(state.repo_root)
+
+    # Resolve defaults from config when not explicitly set
+    if open_pr is None and merge is None:
+        if config.ship_default == "merge":
+            open_pr = True
+            merge = True
+        else:
+            open_pr = True
+            merge = False
+    else:
+        if open_pr is None:
+            open_pr = True
+        if merge is None:
+            merge = False
+
+    if draft is None:
+        draft = config.pr_draft
+
     steps: list[PlanStep] = []
     warnings: list[str] = []
     target_branch = to or state.default_branch
@@ -277,6 +299,7 @@ def plan_ship(
                     params={
                         "title": message or state.branch,
                         "base": target_branch,
+                        "draft": draft,
                     },
                 )
             )
@@ -289,7 +312,10 @@ def plan_ship(
             steps.append(
                 PlanStep(
                     action="pr_merge",
-                    params={"base": target_branch},
+                    params={
+                        "base": target_branch,
+                        "strategy": config.merge_strategy,
+                    },
                 )
             )
 
@@ -318,6 +344,7 @@ def plan_ship(
             "to": to,
             "open_pr": open_pr,
             "merge": merge,
+            "draft": draft,
         },
     )
 

@@ -99,7 +99,10 @@ def execute_plan(plan: Plan, cwd: str | None = None) -> ExecutionResult:
     """
     # Validate state hasn't changed
     current_state = build_state(cwd=cwd)
-    current_hash = current_state.compute_hash(scope=plan.scope)
+    current_hash = current_state.compute_hash(
+        scope=plan.scope,
+        exclude_remote_tracking=plan.exclude_remote_tracking,
+    )
     if current_hash != plan.state_hash:
         return ExecutionResult(
             plan_id=plan.plan_id,

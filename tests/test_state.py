@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from jetsam.core.state import build_state
+from jetsam.core.state import RepoState, build_state
 
 
 class TestBuildState:
@@ -62,3 +62,37 @@ class TestBuildState:
         state = build_state(cwd=str(tmp_git_repo))
         assert state.ahead == 0
         assert state.behind == 0
+
+    def test_compute_hash_exclude_remote_tracking(self):
+        """compute_hash with exclude_remote_tracking should ignore ahead/behind."""
+        base = dict(
+            branch="feature", upstream="origin/feature", default_branch="main",
+            dirty=False, staged=[], unstaged=[], untracked=[],
+            ahead=0, behind=0, stash_count=0,
+            platform="github", remote="user/repo",
+            remote_url="git@github.com:user/repo.git",
+            head_sha="abc123", repo_root="/tmp/repo",
+        )
+        state1 = RepoState(**base)
+        state2 = RepoState(**{**base, "ahead": 2, "behind": 5})
+
+        hash1 = state1.compute_hash(exclude_remote_tracking=True)
+        hash2 = state2.compute_hash(exclude_remote_tracking=True)
+        assert hash1 == hash2
+
+    def test_compute_hash_default_includes_remote_tracking(self):
+        """Default compute_hash should still include ahead/behind."""
+        base = dict(
+            branch="feature", upstream="origin/feature", default_branch="main",
+            dirty=False, staged=[], unstaged=[], untracked=[],
+            ahead=0, behind=0, stash_count=0,
+            platform="github", remote="user/repo",
+            remote_url="git@github.com:user/repo.git",
+            head_sha="abc123", repo_root="/tmp/repo",
+        )
+        state1 = RepoState(**base)
+        state2 = RepoState(**{**base, "ahead": 2, "behind": 5})
+
+        hash1 = state1.compute_hash()
+        hash2 = state2.compute_hash()
+        assert hash1 != hash2

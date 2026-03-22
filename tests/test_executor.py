@@ -4,8 +4,8 @@ import os
 import subprocess
 from pathlib import Path
 
-from jetsam.core.executor import StepResult, execute_plan, _exec_stash, _exec_stash_pop
-from jetsam.core.planner import Plan, PlanStep, plan_save
+from jetsam.core.executor import StepResult, _exec_stash, _exec_stash_pop, execute_plan
+from jetsam.core.planner import Plan, PlanStep, plan_save, plan_sync
 from jetsam.core.state import build_state
 
 
@@ -65,6 +65,52 @@ class TestExecutePlan:
         assert d["status"] == "ok"
         assert isinstance(d["results"], list)
         assert d["completed_steps"] == d["total_steps"]
+
+
+class TestSyncPlanValidation:
+    """Sync plan validation should ignore ahead/behind changes."""
+
+    def test_sync_plan_valid_after_ahead_behind_change(self, tmp_git_repo: Path):
+        """A sync plan should not be rejected when ahead/behind counts change.
+
+        This reproduces the bug: plan_sync creates a plan, then between plan
+        creation and execution, a fetch changes ahead/behind. The executor
+        should still accept the plan since local state hasn't changed.
+        """
+        cwd = str(tmp_git_repo)
+        state = build_state(cwd=cwd)
+        plan = plan_sync(state, plan_id="p_test")
+
+        # The plan's state_hash was computed with ahead=0, behind=0.
+        # Simulate what happens when executor rebuilds state and ahead/behind
+        # differ: the hash should still match because sync excludes those fields.
+        #
+        # We can't easily change ahead/behind in a local-only repo, so we
+        # verify the hash computation directly: rebuild state and confirm the
+        # hash matches even though we're computing it fresh.
+        current_state = build_state(cwd=cwd)
+        current_hash = current_state.compute_hash(
+            scope=plan.scope,
+            exclude_remote_tracking=plan.exclude_remote_tracking,
+        )
+        assert current_hash == plan.state_hash
+
+    def test_save_plan_still_detects_staleness(self, dirty_git_repo: Path):
+        """Save plans should still detect state changes (regression check)."""
+        cwd = str(dirty_git_repo)
+        state = build_state(cwd=cwd)
+        plan = plan_save(state, plan_id="p_test", message="test")
+
+        # Modify a file in scope
+        (dirty_git_repo / "README.md").write_text("# Changed again\n")
+        env = {**os.environ, "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@test.com",
+               "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "test@test.com"}
+        subprocess.run(["git", "add", "README.md"], cwd=cwd, check=True, env=env,
+                       capture_output=True)
+
+        result = execute_plan(plan, cwd=cwd)
+        assert result.status == "failed"
+        assert result.results[0].error == "stale_plan"
 
 
 class TestPlanStore:

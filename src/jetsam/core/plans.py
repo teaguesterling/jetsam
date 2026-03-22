@@ -37,6 +37,7 @@ class PlanStore:
             "steps": [s.to_dict() for s in plan.steps],
             "state_hash": plan.state_hash,
             "scope": plan.scope,
+            "exclude_remote_tracking": plan.exclude_remote_tracking,
             "warnings": plan.warnings,
             "params": plan.params,
             "created_at": time.time(),
@@ -72,6 +73,7 @@ class PlanStore:
             steps=steps,
             state_hash=data["state_hash"],
             scope=data.get("scope"),
+            exclude_remote_tracking=data.get("exclude_remote_tracking", False),
             warnings=data.get("warnings", []),
             params=data.get("params", {}),
         )

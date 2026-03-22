@@ -30,16 +30,20 @@ class Plan:
     steps: list[PlanStep]
     state_hash: str
     scope: list[str] | None = None  # files this plan touches
+    exclude_remote_tracking: bool = False  # if True, hash ignores ahead/behind
     warnings: list[str] = field(default_factory=list)
     params: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "plan_id": self.plan_id,
             "verb": self.verb,
             "steps": [s.to_dict() for s in self.steps],
             "warnings": self.warnings,
         }
+        if self.exclude_remote_tracking:
+            d["exclude_remote_tracking"] = True
+        return d
 
 
 def plan_save(
@@ -105,7 +109,11 @@ def plan_sync(
 
     # Fast path: default branch, ahead only, no staged/unstaged changes, no explicit strategy
     is_default = state.branch == state.default_branch
-    if is_default and state.ahead > 0 and state.behind == 0 and not needs_stash and strategy is None:
+    fast_path = (
+        is_default and state.ahead > 0 and state.behind == 0
+        and not needs_stash and strategy is None
+    )
+    if fast_path:
         steps.append(
             PlanStep(
                 action="push",
@@ -120,7 +128,8 @@ def plan_sync(
             plan_id=plan_id,
             verb="sync",
             steps=steps,
-            state_hash=state.compute_hash(),
+            state_hash=state.compute_hash(exclude_remote_tracking=True),
+            exclude_remote_tracking=True,
             warnings=warnings,
             params={"strategy": strategy},
         )
@@ -170,7 +179,8 @@ def plan_sync(
         plan_id=plan_id,
         verb="sync",
         steps=steps,
-        state_hash=state.compute_hash(),
+        state_hash=state.compute_hash(exclude_remote_tracking=True),
+        exclude_remote_tracking=True,
         warnings=warnings,
         params={"strategy": strategy},
     )
@@ -405,7 +415,8 @@ def plan_finish(
             plan_id=plan_id,
             verb="finish",
             steps=[],
-            state_hash=state.compute_hash(),
+            state_hash=state.compute_hash(exclude_remote_tracking=True),
+            exclude_remote_tracking=True,
             warnings=warnings,
             params={"strategy": strategy, "no_delete": no_delete},
         )
@@ -451,7 +462,8 @@ def plan_finish(
         plan_id=plan_id,
         verb="finish",
         steps=steps,
-        state_hash=state.compute_hash(),
+        state_hash=state.compute_hash(exclude_remote_tracking=True),
+        exclude_remote_tracking=True,
         warnings=warnings,
         params={
             "branch": state.branch,

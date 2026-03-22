@@ -62,11 +62,17 @@ class RepoState:
     # Computed fields for plan validation
     _state_hash: str = field(default="", repr=False)
 
-    def compute_hash(self, scope: list[str] | None = None) -> str:
+    def compute_hash(
+        self,
+        scope: list[str] | None = None,
+        exclude_remote_tracking: bool = False,
+    ) -> str:
         """Compute a hash of the state for plan validation.
 
-        If scope is provided, only hash state related to those files.
-        Otherwise hash the full state.
+        If scope is provided, only hash state related to those files
+        (ahead/behind are never included in scoped hashes).
+        If exclude_remote_tracking is True, omit ahead/behind from unscoped hashes.
+        This is used by sync/finish plans where fetch legitimately changes these values.
         """
         data: dict[str, object]
         if scope:
@@ -87,9 +93,10 @@ class RepoState:
                 "staged": sorted(self.staged),
                 "unstaged": sorted(self.unstaged),
                 "untracked": sorted(self.untracked),
-                "ahead": self.ahead,
-                "behind": self.behind,
             }
+            if not exclude_remote_tracking:
+                data["ahead"] = self.ahead
+                data["behind"] = self.behind
         return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()[:16]
 
     def to_dict(self) -> dict[str, object]:

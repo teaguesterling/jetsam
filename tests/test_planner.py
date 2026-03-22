@@ -1,6 +1,6 @@
 """Tests for plan generation."""
 
-from jetsam.core.planner import plan_save, plan_ship, plan_sync
+from jetsam.core.planner import plan_finish, plan_save, plan_ship, plan_sync
 from jetsam.core.state import RepoState
 
 
@@ -97,6 +97,48 @@ class TestPlanSync:
         rebase_step = next(s for s in plan.steps if s.action == "rebase")
         assert rebase_step.params["onto"] == "origin/main"
 
+    def test_sync_hash_stable_when_ahead_behind_change(self):
+        """Sync plan hash should NOT change when only ahead/behind change.
+
+        This is the core bug: fetch updates remote refs which changes
+        ahead/behind counts, causing stale_plan errors.
+        """
+        state1 = _make_state(ahead=0, behind=0, dirty=False)
+        plan1 = plan_sync(state1, plan_id="p_test")
+
+        state2 = _make_state(ahead=0, behind=3, dirty=False)
+        plan2 = plan_sync(state2, plan_id="p_test")
+
+        assert plan1.state_hash == plan2.state_hash
+
+    def test_sync_hash_changes_on_local_state(self):
+        """Sync plan hash SHOULD change when local state changes."""
+        state1 = _make_state(dirty=False)
+        plan1 = plan_sync(state1, plan_id="p_test")
+
+        # Different branch = different hash
+        state2 = _make_state(dirty=False, branch="other")
+        plan2 = plan_sync(state2, plan_id="p_test")
+
+        assert plan1.state_hash != plan2.state_hash
+
+    def test_sync_hash_changes_on_dirty_state(self):
+        """Sync plan hash SHOULD change when working tree becomes dirty."""
+        state1 = _make_state(dirty=False, staged=[], unstaged=[], untracked=[])
+        plan1 = plan_sync(state1, plan_id="p_test")
+
+        state2 = _make_state(dirty=True, staged=[], unstaged=["new.py"], untracked=[])
+        plan2 = plan_sync(state2, plan_id="p_test")
+
+        assert plan1.state_hash != plan2.state_hash
+
+    def test_sync_to_dict_includes_exclude_remote_tracking(self):
+        """Sync plan's to_dict should include exclude_remote_tracking."""
+        state = _make_state(dirty=False)
+        plan = plan_sync(state, plan_id="p_test")
+        d = plan.to_dict()
+        assert d["exclude_remote_tracking"] is True
+
     def test_default_branch_ahead_only_fast_path(self):
         """Default branch, ahead only, clean tree → just push."""
         state = _make_state(
@@ -166,6 +208,23 @@ class TestPlanSync:
         assert "fetch" in actions
         assert "merge" in actions
         assert "push" not in actions
+
+
+class TestPlanFinish:
+    def test_finish_hash_stable_when_ahead_behind_change(self):
+        """Finish plan hash should NOT change when only ahead/behind change.
+
+        plan_finish includes a fetch step, so it has the same race condition
+        as plan_sync.
+        """
+        state1 = _make_state(ahead=0, behind=0, dirty=False)
+        plan1 = plan_finish(state1, plan_id="p_test")
+
+        state2 = _make_state(ahead=0, behind=3, dirty=False)
+        plan2 = plan_finish(state2, plan_id="p_test")
+
+        assert plan1.state_hash == plan2.state_hash
+        assert plan1.exclude_remote_tracking is True
 
 
 class TestPlanShip:

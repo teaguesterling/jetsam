@@ -126,7 +126,7 @@ Config flows through the planner layer only.
 | `src/jetsam/mcp/tools.py` | Load config in 4 tool functions, pass to planners, change overlapping param defaults to `None` |
 | `src/jetsam/cli/verbs/save.py` | Load config, pass to planner |
 | `src/jetsam/cli/verbs/ship.py` | Load config, pass to planner |
-| `src/jetsam/cli/verbs/start.py` | Load config, pass to planner, change `--strategy` default to `None` |
+| `src/jetsam/cli/verbs/start.py` | Load config, pass to planner |
 | `src/jetsam/cli/verbs/finish.py` | Load config, pass to planner, change `--strategy` default to `None` |
 | `tests/test_planner.py` | ~17 new tests |
 

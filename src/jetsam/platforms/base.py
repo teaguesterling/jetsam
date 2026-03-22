@@ -118,3 +118,23 @@ class Platform(ABC):
     def issue_get(self, number: int) -> IssueDetails | None:
         """Get issue details by number."""
         ...
+
+    @abstractmethod
+    def pr_comment(self, pr_number: int, body: str) -> dict[str, str]:
+        """Post a comment on a PR. Returns {"number": ..., "url": ...}."""
+        ...
+
+    @abstractmethod
+    def pr_review(self, pr_number: int, body: str, event: str) -> dict[str, str]:
+        """Submit a PR review. event: 'approve', 'request-changes', 'comment'."""
+        ...
+
+    @abstractmethod
+    def pr_comments(self, pr_number: int) -> list[dict[str, str]]:
+        """Read comments on a PR. Returns [{author, body, created_at, type}]."""
+        ...
+
+    @abstractmethod
+    def issue_close(self, number: int, comment: str | None = None, reason: str = "completed") -> dict[str, str]:
+        """Close an issue. reason: 'completed' or 'not-planned'."""
+        ...

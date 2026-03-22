@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.2.1
+
+### Bug fixes
+- `ship` with explicit `files` parameter now scopes staging exclusively (#4)
+- `ship` skips commit step when nothing to commit, proceeds to push/PR (#7)
+- `save` returns empty plan with warning when nothing to save (#7)
+- `_resolve_files` applies `exclude` filter to explicit file lists (#4)
+
+### New
+- MCP `ship()` tool accepts `files` parameter for scoped staging
+
 ## v0.2.0
 
 ### New MCP tools

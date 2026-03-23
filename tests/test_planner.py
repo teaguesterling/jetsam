@@ -260,13 +260,67 @@ class TestPlanFinish:
         as plan_sync.
         """
         state1 = _make_state(ahead=0, behind=0, dirty=False)
-        plan1 = plan_finish(state1, plan_id="p_test")
+        plan1 = plan_finish(state1, plan_id="p_test", config=JetsamConfig())
 
         state2 = _make_state(ahead=0, behind=3, dirty=False)
-        plan2 = plan_finish(state2, plan_id="p_test")
+        plan2 = plan_finish(state2, plan_id="p_test", config=JetsamConfig())
 
         assert plan1.state_hash == plan2.state_hash
         assert plan1.exclude_remote_tracking is True
+
+    def test_config_merge_strategy_rebase(self):
+        from jetsam.core.state import PRInfo
+        pr = PRInfo(number=42, state="open", title="feature")
+        state = _make_state(pr=pr)
+        config = JetsamConfig(merge_strategy="rebase")
+        plan = plan_finish(state, plan_id="p_test", config=config)
+        merge_step = next(s for s in plan.steps if s.action == "pr_merge")
+        assert merge_step.params["strategy"] == "rebase"
+
+    def test_config_merge_strategy_merge(self):
+        from jetsam.core.state import PRInfo
+        pr = PRInfo(number=42, state="open", title="feature")
+        state = _make_state(pr=pr)
+        config = JetsamConfig(merge_strategy="merge")
+        plan = plan_finish(state, plan_id="p_test", config=config)
+        merge_step = next(s for s in plan.steps if s.action == "pr_merge")
+        assert merge_step.params["strategy"] == "merge"
+
+    def test_explicit_strategy_overrides_config(self):
+        from jetsam.core.state import PRInfo
+        pr = PRInfo(number=42, state="open", title="feature")
+        state = _make_state(pr=pr)
+        config = JetsamConfig(merge_strategy="rebase")
+        plan = plan_finish(state, plan_id="p_test", strategy="squash", config=config)
+        merge_step = next(s for s in plan.steps if s.action == "pr_merge")
+        assert merge_step.params["strategy"] == "squash"
+
+    def test_delete_on_merge_false_skips_delete(self):
+        from jetsam.core.state import PRInfo
+        pr = PRInfo(number=42, state="open", title="feature")
+        state = _make_state(pr=pr)
+        config = JetsamConfig(delete_on_merge=False)
+        plan = plan_finish(state, plan_id="p_test", config=config)
+        merge_step = next(s for s in plan.steps if s.action == "pr_merge")
+        assert merge_step.params["delete_branch"] is False
+
+    def test_delete_on_merge_true_deletes(self):
+        from jetsam.core.state import PRInfo
+        pr = PRInfo(number=42, state="open", title="feature")
+        state = _make_state(pr=pr)
+        config = JetsamConfig(delete_on_merge=True)
+        plan = plan_finish(state, plan_id="p_test", config=config)
+        merge_step = next(s for s in plan.steps if s.action == "pr_merge")
+        assert merge_step.params["delete_branch"] is True
+
+    def test_explicit_no_delete_overrides_config(self):
+        from jetsam.core.state import PRInfo
+        pr = PRInfo(number=42, state="open", title="feature")
+        state = _make_state(pr=pr)
+        config = JetsamConfig(delete_on_merge=True)
+        plan = plan_finish(state, plan_id="p_test", no_delete=True, config=config)
+        merge_step = next(s for s in plan.steps if s.action == "pr_merge")
+        assert merge_step.params["delete_branch"] is False
 
 
 class TestPlanShip:

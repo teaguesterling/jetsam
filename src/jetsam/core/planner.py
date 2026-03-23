@@ -469,17 +469,27 @@ def plan_start(
 def plan_finish(
     state: RepoState,
     plan_id: str,
-    strategy: str = "squash",
-    no_delete: bool = False,
+    strategy: str | None = None,
+    no_delete: bool | None = None,
     worktree_path: str | None = None,
+    config: JetsamConfig | None = None,
 ) -> Plan:
     """Generate a plan for the 'finish' verb (merge PR, clean up branch).
 
     Args:
-        strategy: Merge strategy ("squash", "merge", "rebase").
-        no_delete: Skip branch deletion after merge.
+        strategy: Merge strategy ("squash", "merge", "rebase"). None means use config.
+        no_delete: Skip branch deletion. None means use config.delete_on_merge.
         worktree_path: If in a worktree, path to remove.
     """
+    if config is None:
+        config = load_config(state.repo_root)
+
+    # Resolve defaults from config
+    if strategy is None:
+        strategy = config.merge_strategy
+    if no_delete is None:
+        no_delete = not config.delete_on_merge
+
     steps: list[PlanStep] = []
     warnings: list[str] = []
 

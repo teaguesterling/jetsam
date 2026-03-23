@@ -384,9 +384,10 @@ def plan_start(
     plan_id: str,
     target: str,
     issue_title: str | None = None,
-    branch_prefix: str = "",
-    worktree: bool = False,
+    branch_prefix: str | None = None,
+    worktree: bool | None = None,
     base: str | None = None,
+    config: JetsamConfig | None = None,
 ) -> Plan:
     """Generate a plan for the 'start' verb (begin work on issue/feature).
 
@@ -394,9 +395,22 @@ def plan_start(
         target: Issue number (e.g. "42") or branch name (e.g. "fix-parser").
         issue_title: Title of the issue (for slug generation if target is numeric).
         branch_prefix: Optional prefix for branch names (e.g. "feature/").
+            None means use config default; "" means no prefix.
         worktree: If True, create a worktree instead of switching branches.
+            None means use config default.
         base: Base branch to create from (default: default_branch).
     """
+    if config is None:
+        config = load_config(state.repo_root)
+
+    # Resolve branch_prefix: explicit (including "") > config
+    if branch_prefix is None:
+        branch_prefix = config.branch_prefix
+
+    # Resolve worktree: explicit bool > config
+    if worktree is None:
+        worktree = config.worktree == "always"
+
     steps: list[PlanStep] = []
     warnings: list[str] = []
     actual_base = base or state.default_branch

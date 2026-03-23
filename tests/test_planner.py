@@ -431,3 +431,69 @@ class TestPlanShip:
         plan = plan_ship(state, plan_id="p_test", message="ship", merge=True, config=config)
         merge_step = next(s for s in plan.steps if s.action == "pr_merge")
         assert merge_step.params["strategy"] == "rebase"
+
+
+class TestPlanStart:
+    def test_config_branch_prefix(self):
+        state = _make_state()
+        config = JetsamConfig(branch_prefix="feature/")
+        plan = plan_start(state, plan_id="p_test", target="fix-bug", config=config)
+        assert plan.params["branch"] == "feature/fix-bug"
+
+    def test_explicit_prefix_overrides_config(self):
+        state = _make_state()
+        config = JetsamConfig(branch_prefix="feature/")
+        plan = plan_start(
+            state, plan_id="p_test", target="fix-bug",
+            branch_prefix="hotfix/", config=config,
+        )
+        assert plan.params["branch"] == "hotfix/fix-bug"
+
+    def test_empty_prefix_config_no_prefix(self):
+        state = _make_state()
+        config = JetsamConfig(branch_prefix="")
+        plan = plan_start(state, plan_id="p_test", target="fix-bug", config=config)
+        assert plan.params["branch"] == "fix-bug"
+
+    def test_worktree_always_uses_worktree(self):
+        state = _make_state(dirty=False)
+        config = JetsamConfig(worktree="always")
+        plan = plan_start(state, plan_id="p_test", target="fix-bug", config=config)
+        actions = [s.action for s in plan.steps]
+        assert "worktree_add" in actions
+        assert "checkout" not in actions
+
+    def test_worktree_never_uses_checkout(self):
+        state = _make_state(dirty=False)
+        config = JetsamConfig(worktree="never")
+        plan = plan_start(state, plan_id="p_test", target="fix-bug", config=config)
+        actions = [s.action for s in plan.steps]
+        assert "checkout" in actions
+        assert "worktree_add" not in actions
+
+    def test_worktree_auto_defaults_to_checkout(self):
+        state = _make_state(dirty=False)
+        config = JetsamConfig(worktree="auto")
+        plan = plan_start(state, plan_id="p_test", target="fix-bug", config=config)
+        actions = [s.action for s in plan.steps]
+        assert "checkout" in actions
+
+    def test_explicit_worktree_true_overrides_config_never(self):
+        state = _make_state(dirty=False)
+        config = JetsamConfig(worktree="never")
+        plan = plan_start(
+            state, plan_id="p_test", target="fix-bug",
+            worktree=True, config=config,
+        )
+        actions = [s.action for s in plan.steps]
+        assert "worktree_add" in actions
+
+    def test_explicit_worktree_false_overrides_config_always(self):
+        state = _make_state(dirty=False)
+        config = JetsamConfig(worktree="always")
+        plan = plan_start(
+            state, plan_id="p_test", target="fix-bug",
+            worktree=False, config=config,
+        )
+        actions = [s.action for s in plan.steps]
+        assert "checkout" in actions

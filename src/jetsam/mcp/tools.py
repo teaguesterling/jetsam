@@ -23,6 +23,7 @@ from jetsam.core.planner import (
     plan_tidy,
 )
 from jetsam.core.plans import PlanStore, generate_plan_id, update_plan
+from jetsam.config.manager import load_config
 from jetsam.core.state import build_state
 from jetsam.git.parsers import parse_diff_numstat, parse_log
 from jetsam.git.wrapper import run_git_sync
@@ -73,10 +74,12 @@ def register_tools(mcp: FastMCP) -> None:
             files: Explicit file paths to stage.
         """
         state = build_state()
+        config = load_config(state.repo_root)
         pid = generate_plan_id()
         plan = plan_save(
             state, plan_id=pid,
             message=message, include=include, exclude=exclude, files=files,
+            config=config,
         )
         _get_store().save(plan)
         return plan.to_dict()
@@ -102,8 +105,9 @@ def register_tools(mcp: FastMCP) -> None:
         exclude: str | None = None,
         files: list[str] | None = None,
         to: str | None = None,
-        pr: bool = True,
-        merge: bool = False,
+        pr: bool | None = None,
+        merge: bool | None = None,
+        draft: bool | None = None,
     ) -> dict[str, Any]:
         """Full pipeline: stage, commit, push, open PR. Returns a plan.
 
@@ -113,15 +117,18 @@ def register_tools(mcp: FastMCP) -> None:
             exclude: Glob pattern to filter files out.
             files: Explicit file paths to stage.
             to: Target branch for PR (default: main/master).
-            pr: Create/update a PR (default: true).
-            merge: Also merge the PR after creating it.
+            pr: Create/update a PR. Defaults to config value or true.
+            merge: Also merge the PR after creating it. Defaults to config value or false.
+            draft: Create the PR as a draft. Defaults to config value or false.
         """
         state = build_state()
+        config = load_config(state.repo_root)
         pid = generate_plan_id()
         plan = plan_ship(
             state, plan_id=pid,
             message=message, include=include, exclude=exclude,
-            files=files, to=to, open_pr=pr, merge=merge,
+            files=files, to=to, open_pr=pr, merge=merge, draft=draft,
+            config=config,
         )
         _get_store().save(plan)
         return plan.to_dict()
@@ -256,9 +263,9 @@ def register_tools(mcp: FastMCP) -> None:
     @mcp.tool()
     def start(
         target: str,
-        worktree: bool = False,
+        worktree: bool | None = None,
         base: str | None = None,
-        prefix: str = "",
+        prefix: str | None = None,
     ) -> dict[str, Any]:
         """Start work on an issue or feature. Returns a plan to confirm().
 
@@ -269,6 +276,7 @@ def register_tools(mcp: FastMCP) -> None:
             prefix: Branch name prefix (e.g. "feature/").
         """
         state = build_state()
+        config = load_config(state.repo_root)
         pid = generate_plan_id()
 
         # Fetch issue title if target is numeric
@@ -284,14 +292,15 @@ def register_tools(mcp: FastMCP) -> None:
             state, plan_id=pid,
             target=target, issue_title=issue_title,
             branch_prefix=prefix, worktree=worktree, base=base,
+            config=config,
         )
         _get_store().save(plan)
         return plan.to_dict()
 
     @mcp.tool()
     def finish(
-        strategy: str = "squash",
-        no_delete: bool = False,
+        strategy: str | None = None,
+        no_delete: bool | None = None,
     ) -> dict[str, Any]:
         """Merge PR and clean up branch. Returns a plan to confirm().
 
@@ -300,6 +309,7 @@ def register_tools(mcp: FastMCP) -> None:
             no_delete: Keep the branch after merging.
         """
         state = build_state()
+        config = load_config(state.repo_root)
         pid = generate_plan_id()
 
         worktree_path = None
@@ -310,6 +320,7 @@ def register_tools(mcp: FastMCP) -> None:
             state, plan_id=pid,
             strategy=strategy, no_delete=no_delete,
             worktree_path=worktree_path,
+            config=config,
         )
         _get_store().save(plan)
         return plan.to_dict()

@@ -2,6 +2,7 @@
 
 import click
 
+from jetsam.config.manager import load_config
 from jetsam.core.executor import execute_plan
 from jetsam.core.output import format_json
 from jetsam.core.planner import Plan, plan_start
@@ -13,7 +14,7 @@ from jetsam.core.state import build_state
 @click.argument("target")
 @click.option("-w", "--worktree", is_flag=True, help="Create a worktree instead of switching")
 @click.option("--base", default=None, help="Base branch (default: main/master)")
-@click.option("--prefix", default="", help="Branch name prefix (e.g. feature/)")
+@click.option("--prefix", default=None, help="Branch name prefix (e.g. feature/)")
 @click.option("--dry-run", is_flag=True, help="Show plan without executing")
 @click.option("--execute", "auto_execute", is_flag=True, help="Execute without prompting")
 @click.pass_context
@@ -22,7 +23,7 @@ def start(
     target: str,
     worktree: bool,
     base: str | None,
-    prefix: str,
+    prefix: str | None,
     dry_run: bool,
     auto_execute: bool,
 ) -> None:
@@ -32,6 +33,7 @@ def start(
     If numeric, the issue title is used to generate a branch name slug.
     """
     state = build_state()
+    config = load_config(state.repo_root)
     plan_id = generate_plan_id()
 
     # If target is numeric, try to fetch issue title for slug
@@ -45,8 +47,9 @@ def start(
         target=target,
         issue_title=issue_title,
         branch_prefix=prefix,
-        worktree=worktree,
+        worktree=worktree or None,
         base=base,
+        config=config,
     )
 
     json_mode = ctx.obj.get("json")

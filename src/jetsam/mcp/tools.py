@@ -247,7 +247,7 @@ def register_tools(mcp: FastMCP) -> None:
         actual_branch = branch or state.branch
         platform = _get_platform(state)
         if platform is None:
-            return {"error": "no_platform", "message": "No platform configured"}
+            return _no_platform_error()
         pr = platform.pr_for_branch(actual_branch)
         if pr is None:
             return {"pr": None, "branch": actual_branch}
@@ -267,7 +267,7 @@ def register_tools(mcp: FastMCP) -> None:
         repo_state = build_state()
         platform = _get_platform(repo_state)
         if platform is None:
-            return [{"error": "no_platform"}]
+            return _no_platform_error()
         prs = platform.pr_list(state=state, author=author)
         return [asdict(p) for p in prs]
 
@@ -281,13 +281,13 @@ def register_tools(mcp: FastMCP) -> None:
         repo_state = build_state()
         platform = _get_platform(repo_state)
         if platform is None:
-            return [{"error": "no_platform"}]
+            return _no_platform_error()
 
         actual_pr = pr_number
         if actual_pr is None:
             pr = platform.pr_for_branch(repo_state.branch)
             if pr is None:
-                return [{"error": "no_pr", "branch": repo_state.branch}]
+                return _no_pr_error(repo_state.branch)
             actual_pr = pr.number
 
         results = platform.pr_checks(actual_pr)
@@ -381,7 +381,7 @@ def register_tools(mcp: FastMCP) -> None:
         repo_state = build_state()
         platform = _get_platform(repo_state)
         if platform is None:
-            return [{"error": "no_platform"}]
+            return _no_platform_error()
         issue_list = platform.issue_list(state=state, labels=labels)
         return [asdict(i) for i in issue_list]
 
@@ -401,14 +401,14 @@ def register_tools(mcp: FastMCP) -> None:
         repo_state = build_state()
         platform = _get_platform(repo_state)
         if platform is None:
-            return {"error": "no_platform", "message": "No platform configured"}
+            return _no_platform_error()
 
         actual_pr = pr_number
         if actual_pr is None:
             actual_branch = branch or repo_state.branch
             pr = platform.pr_for_branch(actual_branch)
             if pr is None:
-                return {"error": "no_pr", "branch": actual_branch}
+                return _no_pr_error(actual_branch)
             actual_pr = pr.number
 
         return platform.pr_comment(actual_pr, body)
@@ -431,14 +431,14 @@ def register_tools(mcp: FastMCP) -> None:
         repo_state = build_state()
         platform = _get_platform(repo_state)
         if platform is None:
-            return {"error": "no_platform", "message": "No platform configured"}
+            return _no_platform_error()
 
         actual_pr = pr_number
         if actual_pr is None:
             actual_branch = branch or repo_state.branch
             pr = platform.pr_for_branch(actual_branch)
             if pr is None:
-                return {"error": "no_pr", "branch": actual_branch}
+                return _no_pr_error(actual_branch)
             actual_pr = pr.number
 
         return platform.pr_review(actual_pr, body, event)
@@ -457,14 +457,14 @@ def register_tools(mcp: FastMCP) -> None:
         repo_state = build_state()
         platform = _get_platform(repo_state)
         if platform is None:
-            return [{"error": "no_platform"}]
+            return _no_platform_error()
 
         actual_pr = pr_number
         if actual_pr is None:
             actual_branch = branch or repo_state.branch
             pr = platform.pr_for_branch(actual_branch)
             if pr is None:
-                return [{"error": "no_pr", "branch": actual_branch}]
+                return _no_pr_error(actual_branch)
             actual_pr = pr.number
 
         return platform.pr_comments(actual_pr)
@@ -485,7 +485,7 @@ def register_tools(mcp: FastMCP) -> None:
         repo_state = build_state()
         platform = _get_platform(repo_state)
         if platform is None:
-            return {"error": "no_platform", "message": "No platform configured"}
+            return _no_platform_error()
 
         return platform.issue_close(number, comment=comment, reason=reason)
 

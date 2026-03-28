@@ -278,6 +278,171 @@ class TestErrorFormats:
         assert "recoverable" in result
 
 
+    def test_pr_view_no_platform_returns_jetsam_error(
+        self, tmp_git_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("GIT_DIR", str(tmp_git_repo / ".git"))
+        monkeypatch.setenv("GIT_WORK_TREE", str(tmp_git_repo))
+        from mcp.server.fastmcp import FastMCP
+
+        mcp = FastMCP("test")
+        mcp_tools.register_tools(mcp)
+
+        pr_view_fn = mcp._tool_manager._tools["pr_view"].fn
+        result = pr_view_fn(branch=None)
+
+        assert isinstance(result, dict)
+        assert result["error"] == "no_platform"
+        assert "message" in result
+        assert "recoverable" in result
+
+    def test_pr_list_no_platform_returns_jetsam_error_dict(
+        self, tmp_git_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("GIT_DIR", str(tmp_git_repo / ".git"))
+        monkeypatch.setenv("GIT_WORK_TREE", str(tmp_git_repo))
+        from mcp.server.fastmcp import FastMCP
+
+        mcp = FastMCP("test")
+        mcp_tools.register_tools(mcp)
+
+        pr_list_fn = mcp._tool_manager._tools["pr_list"].fn
+        result = pr_list_fn(state="open", author=None)
+
+        assert isinstance(result, dict), "Error should be a dict, not a list"
+        assert result["error"] == "no_platform"
+        assert "message" in result
+        assert "recoverable" in result
+
+    def test_checks_no_platform_returns_jetsam_error_dict(
+        self, tmp_git_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("GIT_DIR", str(tmp_git_repo / ".git"))
+        monkeypatch.setenv("GIT_WORK_TREE", str(tmp_git_repo))
+        from mcp.server.fastmcp import FastMCP
+
+        mcp = FastMCP("test")
+        mcp_tools.register_tools(mcp)
+
+        checks_fn = mcp._tool_manager._tools["checks"].fn
+        result = checks_fn(pr_number=None)
+
+        assert isinstance(result, dict), "Error should be a dict, not a list"
+        assert result["error"] == "no_platform"
+        assert "message" in result
+
+    def test_issues_no_platform_returns_jetsam_error_dict(
+        self, tmp_git_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("GIT_DIR", str(tmp_git_repo / ".git"))
+        monkeypatch.setenv("GIT_WORK_TREE", str(tmp_git_repo))
+        from mcp.server.fastmcp import FastMCP
+
+        mcp = FastMCP("test")
+        mcp_tools.register_tools(mcp)
+
+        issues_fn = mcp._tool_manager._tools["issues"].fn
+        result = issues_fn(state="open", labels=None)
+
+        assert isinstance(result, dict), "Error should be a dict, not a list"
+        assert result["error"] == "no_platform"
+        assert "message" in result
+
+    def test_pr_comments_no_platform_returns_jetsam_error_dict(
+        self, tmp_git_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("GIT_DIR", str(tmp_git_repo / ".git"))
+        monkeypatch.setenv("GIT_WORK_TREE", str(tmp_git_repo))
+        from mcp.server.fastmcp import FastMCP
+
+        mcp = FastMCP("test")
+        mcp_tools.register_tools(mcp)
+
+        fn = mcp._tool_manager._tools["pr_comments"].fn
+        result = fn(branch=None, pr_number=None)
+
+        assert isinstance(result, dict), "Error should be a dict, not a list"
+        assert result["error"] == "no_platform"
+        assert "message" in result
+
+    def test_pr_comment_no_platform_returns_jetsam_error(
+        self, tmp_git_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("GIT_DIR", str(tmp_git_repo / ".git"))
+        monkeypatch.setenv("GIT_WORK_TREE", str(tmp_git_repo))
+        from mcp.server.fastmcp import FastMCP
+
+        mcp = FastMCP("test")
+        mcp_tools.register_tools(mcp)
+
+        fn = mcp._tool_manager._tools["pr_comment"].fn
+        result = fn(body="test", branch=None, pr_number=None)
+
+        assert isinstance(result, dict)
+        assert result["error"] == "no_platform"
+        assert "message" in result
+
+    def test_pr_review_no_platform_returns_jetsam_error(
+        self, tmp_git_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("GIT_DIR", str(tmp_git_repo / ".git"))
+        monkeypatch.setenv("GIT_WORK_TREE", str(tmp_git_repo))
+        from mcp.server.fastmcp import FastMCP
+
+        mcp = FastMCP("test")
+        mcp_tools.register_tools(mcp)
+
+        fn = mcp._tool_manager._tools["pr_review"].fn
+        result = fn(event="approve", body="", branch=None, pr_number=None)
+
+        assert isinstance(result, dict)
+        assert result["error"] == "no_platform"
+        assert "message" in result
+
+    def test_issue_close_no_platform_returns_jetsam_error(
+        self, tmp_git_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("GIT_DIR", str(tmp_git_repo / ".git"))
+        monkeypatch.setenv("GIT_WORK_TREE", str(tmp_git_repo))
+        from mcp.server.fastmcp import FastMCP
+
+        mcp = FastMCP("test")
+        mcp_tools.register_tools(mcp)
+
+        fn = mcp._tool_manager._tools["issue_close"].fn
+        result = fn(number=999, comment=None, reason="completed")
+
+        assert isinstance(result, dict)
+        assert result["error"] == "no_platform"
+        assert "message" in result
+
+    def test_checks_no_pr_returns_jetsam_error_dict(
+        self, tmp_git_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """checks() should return JetsamError dict when no PR exists."""
+        monkeypatch.setenv("GIT_DIR", str(tmp_git_repo / ".git"))
+        monkeypatch.setenv("GIT_WORK_TREE", str(tmp_git_repo))
+
+        from unittest.mock import MagicMock
+
+        from mcp.server.fastmcp import FastMCP
+
+        mock_platform = MagicMock()
+        mock_platform.pr_for_branch.return_value = None
+        monkeypatch.setattr(mcp_tools, "_get_platform", lambda _: mock_platform)
+
+        mcp = FastMCP("test")
+        mcp_tools.register_tools(mcp)
+
+        checks_fn = mcp._tool_manager._tools["checks"].fn
+        result = checks_fn(pr_number=None)
+
+        assert isinstance(result, dict), "Error should be a dict, not a list"
+        assert result["error"] == "no_pr"
+        assert "message" in result
+        assert "recoverable" in result
+
+
 class TestErrorHelpers:
     """Test the error helper functions produce standard JetsamError format."""
 

@@ -42,6 +42,7 @@ def _get_store() -> PlanStore:
     if _plan_store is None:
         state = build_state()
         _plan_store = PlanStore(state.repo_root)
+        _plan_store.cleanup_expired()
     return _plan_store
 
 

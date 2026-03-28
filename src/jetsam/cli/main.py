@@ -80,6 +80,7 @@ def cli(ctx: click.Context, json_output: bool) -> None:
 # Register all verb commands
 from jetsam.cli.verbs.checks import checks  # noqa: E402
 from jetsam.cli.verbs.completions import completions  # noqa: E402
+from jetsam.cli.verbs.config import config  # noqa: E402
 from jetsam.cli.verbs.diff import diff  # noqa: E402
 from jetsam.cli.verbs.finish import finish  # noqa: E402
 from jetsam.cli.verbs.init import init  # noqa: E402
@@ -113,6 +114,7 @@ cli.add_command(issues)
 cli.add_command(prs)
 cli.add_command(release)
 cli.add_command(completions)
+cli.add_command(config)
 
 
 @cli.command()

@@ -64,3 +64,47 @@ def _merge_from_file(config: JetsamConfig, path: Path) -> None:
     for key, value in data.items():
         if key in valid_fields:
             setattr(config, key, value)
+
+
+def valid_config_keys() -> set[str]:
+    """Return the set of valid user-facing config keys."""
+    return {f.name for f in JetsamConfig.__dataclass_fields__.values() if f.repr}
+
+
+def global_config_path() -> Path:
+    """Return the global config file path."""
+    return Path.home() / ".config" / "jetsam" / "config.yaml"
+
+
+def repo_config_path(repo_root: str) -> Path:
+    """Return the repo config file path."""
+    return Path(repo_root) / ".jetsam" / "config.yaml"
+
+
+def save_config(config_path: str, key: str, value: str) -> None:
+    """Write a single key to a YAML config file.
+
+    Coerces string values to appropriate types (bool, str).
+    """
+    path = Path(config_path)
+    data: dict[str, object] = {}
+    if path.exists():
+        try:
+            with open(path) as f:
+                loaded = yaml.safe_load(f)
+            if isinstance(loaded, dict):
+                data = loaded
+        except (yaml.YAMLError, OSError):
+            pass
+
+    # Type coercion
+    coerced: object = value
+    if value.lower() in ("true", "yes"):
+        coerced = True
+    elif value.lower() in ("false", "no"):
+        coerced = False
+
+    data[key] = coerced
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as f:
+        yaml.dump(data, f, default_flow_style=False)

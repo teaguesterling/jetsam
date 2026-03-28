@@ -7,6 +7,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from jetsam.config.manager import JetsamConfig, load_config
 from jetsam.core.state import RepoState
 
 
@@ -56,8 +57,12 @@ def plan_save(
     include: str | None = None,
     exclude: str | None = None,
     files: list[str] | None = None,
+    config: JetsamConfig | None = None,
 ) -> Plan:
     """Generate a plan for the 'save' verb (stage + commit)."""
+    if config is None:
+        config = load_config(state.repo_root)
+
     # Determine which files to stage
     target_files = _resolve_files(state, include, exclude, files)
     warnings: list[str] = []
@@ -89,6 +94,19 @@ def plan_save(
             params={"message": message, "file_count": len(all_staged)},
         )
     )
+
+    # Auto-push if configured (but not on default branch)
+    if config.auto_push and state.branch != state.default_branch:
+        steps.append(
+            PlanStep(
+                action="push",
+                params={
+                    "branch": state.branch,
+                    "remote": "origin",
+                    "set_upstream": state.upstream is None,
+                },
+            )
+        )
 
     scope = target_files or state.staged
 
@@ -205,10 +223,32 @@ def plan_ship(
     exclude: str | None = None,
     files: list[str] | None = None,
     to: str | None = None,
-    open_pr: bool = True,
-    merge: bool = False,
+    open_pr: bool | None = None,
+    merge: bool | None = None,
+    draft: bool | None = None,
+    config: JetsamConfig | None = None,
 ) -> Plan:
     """Generate a plan for the 'ship' verb (stage + commit + push + PR)."""
+    if config is None:
+        config = load_config(state.repo_root)
+
+    # Resolve defaults from config when not explicitly set
+    if open_pr is None and merge is None:
+        if config.ship_default == "merge":
+            open_pr = True
+            merge = True
+        else:
+            open_pr = True
+            merge = False
+    else:
+        if open_pr is None:
+            open_pr = True
+        if merge is None:
+            merge = False
+
+    if draft is None:
+        draft = config.pr_draft
+
     steps: list[PlanStep] = []
     warnings: list[str] = []
     target_branch = to or state.default_branch
@@ -262,6 +302,7 @@ def plan_ship(
                     params={
                         "title": message or state.branch,
                         "base": target_branch,
+                        "draft": draft,
                     },
                 )
             )
@@ -274,7 +315,10 @@ def plan_ship(
             steps.append(
                 PlanStep(
                     action="pr_merge",
-                    params={"base": target_branch},
+                    params={
+                        "base": target_branch,
+                        "strategy": config.merge_strategy,
+                    },
                 )
             )
 
@@ -303,6 +347,7 @@ def plan_ship(
             "to": to,
             "open_pr": open_pr,
             "merge": merge,
+            "draft": draft,
         },
     )
 
@@ -342,9 +387,10 @@ def plan_start(
     plan_id: str,
     target: str,
     issue_title: str | None = None,
-    branch_prefix: str = "",
-    worktree: bool = False,
+    branch_prefix: str | None = None,
+    worktree: bool | None = None,
     base: str | None = None,
+    config: JetsamConfig | None = None,
 ) -> Plan:
     """Generate a plan for the 'start' verb (begin work on issue/feature).
 
@@ -352,9 +398,22 @@ def plan_start(
         target: Issue number (e.g. "42") or branch name (e.g. "fix-parser").
         issue_title: Title of the issue (for slug generation if target is numeric).
         branch_prefix: Optional prefix for branch names (e.g. "feature/").
+            None means use config default; "" means no prefix.
         worktree: If True, create a worktree instead of switching branches.
+            None means use config default.
         base: Base branch to create from (default: default_branch).
     """
+    if config is None:
+        config = load_config(state.repo_root)
+
+    # Resolve branch_prefix: explicit (including "") > config
+    if branch_prefix is None:
+        branch_prefix = config.branch_prefix
+
+    # Resolve worktree: explicit bool > config
+    if worktree is None:
+        worktree = config.worktree == "always"
+
     steps: list[PlanStep] = []
     warnings: list[str] = []
     actual_base = base or state.default_branch
@@ -413,17 +472,27 @@ def plan_start(
 def plan_finish(
     state: RepoState,
     plan_id: str,
-    strategy: str = "squash",
-    no_delete: bool = False,
+    strategy: str | None = None,
+    no_delete: bool | None = None,
     worktree_path: str | None = None,
+    config: JetsamConfig | None = None,
 ) -> Plan:
     """Generate a plan for the 'finish' verb (merge PR, clean up branch).
 
     Args:
-        strategy: Merge strategy ("squash", "merge", "rebase").
-        no_delete: Skip branch deletion after merge.
+        strategy: Merge strategy ("squash", "merge", "rebase"). None means use config.
+        no_delete: Skip branch deletion. None means use config.delete_on_merge.
         worktree_path: If in a worktree, path to remove.
     """
+    if config is None:
+        config = load_config(state.repo_root)
+
+    # Resolve defaults from config
+    if strategy is None:
+        strategy = config.merge_strategy
+    if no_delete is None:
+        no_delete = not config.delete_on_merge
+
     steps: list[PlanStep] = []
     warnings: list[str] = []
 

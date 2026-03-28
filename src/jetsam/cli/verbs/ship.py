@@ -2,6 +2,7 @@
 
 import click
 
+from jetsam.config.manager import load_config
 from jetsam.core.executor import execute_plan
 from jetsam.core.output import format_json
 from jetsam.core.planner import Plan, plan_ship
@@ -35,6 +36,7 @@ def ship(
     Combines save + push + PR creation in a single command.
     """
     state = build_state()
+    config = load_config(state.repo_root)
     plan_id = generate_plan_id()
 
     plan = plan_ship(
@@ -44,8 +46,9 @@ def ship(
         include=include,
         exclude=exclude,
         to=target,
-        open_pr=not no_pr,
-        merge=merge,
+        open_pr=False if no_pr else None,
+        merge=merge or None,
+        config=config,
     )
 
     json_mode = ctx.obj.get("json")

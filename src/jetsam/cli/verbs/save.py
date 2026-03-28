@@ -2,6 +2,7 @@
 
 import click
 
+from jetsam.config.manager import load_config
 from jetsam.core.executor import execute_plan
 from jetsam.core.output import format_json
 from jetsam.core.planner import Plan, plan_save
@@ -32,6 +33,7 @@ def save(
     modified tracked files (or files matching --include).
     """
     state = build_state()
+    config = load_config(state.repo_root)
     plan_id = generate_plan_id()
 
     plan = plan_save(
@@ -41,6 +43,7 @@ def save(
         include=include,
         exclude=exclude,
         files=list(files) if files else None,
+        config=config,
     )
 
     json_mode = ctx.obj.get("json")

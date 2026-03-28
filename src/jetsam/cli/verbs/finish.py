@@ -2,6 +2,7 @@
 
 import click
 
+from jetsam.config.manager import load_config
 from jetsam.core.executor import execute_plan
 from jetsam.core.output import format_json
 from jetsam.core.planner import Plan, plan_finish
@@ -11,14 +12,14 @@ from jetsam.core.state import build_state
 
 @click.command()
 @click.option("--strategy", type=click.Choice(["squash", "merge", "rebase"]),
-              default="squash", help="Merge strategy (default: squash)")
+              default=None, help="Merge strategy (default: squash)")
 @click.option("--no-delete", is_flag=True, help="Keep the branch after merging")
 @click.option("--dry-run", is_flag=True, help="Show plan without executing")
 @click.option("--execute", "auto_execute", is_flag=True, help="Execute without prompting")
 @click.pass_context
 def finish(
     ctx: click.Context,
-    strategy: str,
+    strategy: str | None,
     no_delete: bool,
     dry_run: bool,
     auto_execute: bool,
@@ -29,6 +30,7 @@ def finish(
     and deletes the feature branch.
     """
     state = build_state()
+    config = load_config(state.repo_root)
     plan_id = generate_plan_id()
 
     # Detect worktree path if applicable
@@ -40,8 +42,9 @@ def finish(
         state,
         plan_id=plan_id,
         strategy=strategy,
-        no_delete=no_delete,
+        no_delete=no_delete or None,
         worktree_path=worktree_path,
+        config=config,
     )
 
     json_mode = ctx.obj.get("json")

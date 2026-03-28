@@ -1,7 +1,10 @@
 """Tests for plan generation."""
 
-from jetsam.core.planner import plan_finish, plan_save, plan_ship, plan_sync
-from jetsam.core.state import RepoState
+from jetsam.config.manager import JetsamConfig
+from jetsam.core.planner import plan_finish, plan_save, plan_ship, plan_start, plan_sync
+from jetsam.core.state import PRInfo, RepoState
+
+_DEFAULT_CONFIG = JetsamConfig()
 
 
 def _make_state(**kwargs):
@@ -29,7 +32,7 @@ def _make_state(**kwargs):
 class TestPlanSave:
     def test_basic(self):
         state = _make_state()
-        plan = plan_save(state, plan_id="p_test", message="fix bug")
+        plan = plan_save(state, plan_id="p_test", message="fix bug", config=_DEFAULT_CONFIG)
         assert plan.verb == "save"
         assert len(plan.steps) == 2  # stage + commit
         assert plan.steps[0].action == "stage"
@@ -38,21 +41,27 @@ class TestPlanSave:
 
     def test_include_pattern(self):
         state = _make_state(unstaged=["src/main.py", "tests/test_main.py", "docs/readme.md"])
-        plan = plan_save(state, plan_id="p_test", message="fix", include="src/*.py")
+        plan = plan_save(
+            state, plan_id="p_test", message="fix", include="src/*.py", config=_DEFAULT_CONFIG
+        )
         stage_step = plan.steps[0]
         assert "src/main.py" in stage_step.params["files"]
         assert "docs/readme.md" not in stage_step.params["files"]
 
     def test_exclude_pattern(self):
         state = _make_state(unstaged=["src/main.py", "src/generated.py"])
-        plan = plan_save(state, plan_id="p_test", message="fix", exclude="*generated*")
+        plan = plan_save(
+            state, plan_id="p_test", message="fix", exclude="*generated*", config=_DEFAULT_CONFIG
+        )
         stage_step = plan.steps[0]
         assert "src/main.py" in stage_step.params["files"]
         assert "src/generated.py" not in stage_step.params["files"]
 
     def test_explicit_files(self):
         state = _make_state()
-        plan = plan_save(state, plan_id="p_test", message="fix", files=["specific.py"])
+        plan = plan_save(
+            state, plan_id="p_test", message="fix", files=["specific.py"], config=_DEFAULT_CONFIG
+        )
         stage_step = plan.steps[0]
         assert stage_step.params["files"] == ["specific.py"]
 
@@ -60,22 +69,53 @@ class TestPlanSave:
         state = _make_state()
         plan = plan_save(
             state, plan_id="p_test", message="fix",
-            files=["keep.py", "generated.py"], exclude="*generated*",
+            files=["keep.py", "generated.py"], exclude="*generated*", config=_DEFAULT_CONFIG,
         )
         stage_step = plan.steps[0]
         assert stage_step.params["files"] == ["keep.py"]
 
     def test_auto_message(self):
         state = _make_state(unstaged=["src/parser.py"])
-        plan = plan_save(state, plan_id="p_test")
+        plan = plan_save(state, plan_id="p_test", config=_DEFAULT_CONFIG)
         commit_step = next(s for s in plan.steps if s.action == "commit")
         assert "parser" in commit_step.params["message"]
 
     def test_nothing_to_commit(self):
         state = _make_state(staged=[], unstaged=[], untracked=[], dirty=False)
-        plan = plan_save(state, plan_id="p_test", message="noop")
+        plan = plan_save(state, plan_id="p_test", message="noop", config=_DEFAULT_CONFIG)
         assert any("No files" in w for w in plan.warnings)
         assert len(plan.steps) == 0  # should have no steps
+
+    def test_auto_push_adds_push_step(self):
+        state = _make_state()
+        config = JetsamConfig(auto_push=True)
+        plan = plan_save(state, plan_id="p_test", message="fix bug", config=config)
+        actions = [s.action for s in plan.steps]
+        assert "push" in actions
+        push_step = next(s for s in plan.steps if s.action == "push")
+        assert push_step.params["branch"] == "feature"
+
+    def test_auto_push_false_no_push_step(self):
+        state = _make_state()
+        config = JetsamConfig(auto_push=False)
+        plan = plan_save(state, plan_id="p_test", message="fix bug", config=config)
+        actions = [s.action for s in plan.steps]
+        assert "push" not in actions
+
+    def test_auto_push_on_default_branch_no_push(self):
+        state = _make_state(branch="main", default_branch="main")
+        config = JetsamConfig(auto_push=True)
+        plan = plan_save(state, plan_id="p_test", message="fix bug", config=config)
+        actions = [s.action for s in plan.steps]
+        assert "push" not in actions
+
+    def test_default_config_no_push(self):
+        """Default config (auto_push=False) preserves existing behavior."""
+        state = _make_state()
+        config = JetsamConfig()
+        plan = plan_save(state, plan_id="p_test", message="fix bug", config=config)
+        actions = [s.action for s in plan.steps]
+        assert "push" not in actions
 
 
 class TestPlanSync:
@@ -228,19 +268,73 @@ class TestPlanFinish:
         as plan_sync.
         """
         state1 = _make_state(ahead=0, behind=0, dirty=False)
-        plan1 = plan_finish(state1, plan_id="p_test")
+        plan1 = plan_finish(state1, plan_id="p_test", config=_DEFAULT_CONFIG)
 
         state2 = _make_state(ahead=0, behind=3, dirty=False)
-        plan2 = plan_finish(state2, plan_id="p_test")
+        plan2 = plan_finish(state2, plan_id="p_test", config=_DEFAULT_CONFIG)
 
         assert plan1.state_hash == plan2.state_hash
         assert plan1.exclude_remote_tracking is True
+
+    def test_config_merge_strategy_rebase(self):
+
+        pr = PRInfo(number=42, state="open", title="feature")
+        state = _make_state(pr=pr)
+        config = JetsamConfig(merge_strategy="rebase")
+        plan = plan_finish(state, plan_id="p_test", config=config)
+        merge_step = next(s for s in plan.steps if s.action == "pr_merge")
+        assert merge_step.params["strategy"] == "rebase"
+
+    def test_config_merge_strategy_merge(self):
+
+        pr = PRInfo(number=42, state="open", title="feature")
+        state = _make_state(pr=pr)
+        config = JetsamConfig(merge_strategy="merge")
+        plan = plan_finish(state, plan_id="p_test", config=config)
+        merge_step = next(s for s in plan.steps if s.action == "pr_merge")
+        assert merge_step.params["strategy"] == "merge"
+
+    def test_explicit_strategy_overrides_config(self):
+
+        pr = PRInfo(number=42, state="open", title="feature")
+        state = _make_state(pr=pr)
+        config = JetsamConfig(merge_strategy="rebase")
+        plan = plan_finish(state, plan_id="p_test", strategy="squash", config=config)
+        merge_step = next(s for s in plan.steps if s.action == "pr_merge")
+        assert merge_step.params["strategy"] == "squash"
+
+    def test_delete_on_merge_false_skips_delete(self):
+
+        pr = PRInfo(number=42, state="open", title="feature")
+        state = _make_state(pr=pr)
+        config = JetsamConfig(delete_on_merge=False)
+        plan = plan_finish(state, plan_id="p_test", config=config)
+        merge_step = next(s for s in plan.steps if s.action == "pr_merge")
+        assert merge_step.params["delete_branch"] is False
+
+    def test_delete_on_merge_true_deletes(self):
+
+        pr = PRInfo(number=42, state="open", title="feature")
+        state = _make_state(pr=pr)
+        config = JetsamConfig(delete_on_merge=True)
+        plan = plan_finish(state, plan_id="p_test", config=config)
+        merge_step = next(s for s in plan.steps if s.action == "pr_merge")
+        assert merge_step.params["delete_branch"] is True
+
+    def test_explicit_no_delete_overrides_config(self):
+
+        pr = PRInfo(number=42, state="open", title="feature")
+        state = _make_state(pr=pr)
+        config = JetsamConfig(delete_on_merge=True)
+        plan = plan_finish(state, plan_id="p_test", no_delete=True, config=config)
+        merge_step = next(s for s in plan.steps if s.action == "pr_merge")
+        assert merge_step.params["delete_branch"] is False
 
 
 class TestPlanShip:
     def test_full_pipeline(self):
         state = _make_state()
-        plan = plan_ship(state, plan_id="p_test", message="ship it")
+        plan = plan_ship(state, plan_id="p_test", message="ship it", config=_DEFAULT_CONFIG)
         actions = [s.action for s in plan.steps]
         assert "stage" in actions
         assert "commit" in actions
@@ -248,35 +342,39 @@ class TestPlanShip:
         assert "pr_create" in actions
 
     def test_with_existing_pr(self):
-        from jetsam.core.state import PRInfo
+
 
         pr = PRInfo(number=42, state="open", title="existing")
         state = _make_state(pr=pr)
-        plan = plan_ship(state, plan_id="p_test", message="update")
+        plan = plan_ship(state, plan_id="p_test", message="update", config=_DEFAULT_CONFIG)
         actions = [s.action for s in plan.steps]
         assert "pr_update" in actions
         assert "pr_create" not in actions
 
     def test_behind_warning(self):
         state = _make_state(behind=3)
-        plan = plan_ship(state, plan_id="p_test", message="ship")
+        plan = plan_ship(state, plan_id="p_test", message="ship", config=_DEFAULT_CONFIG)
         assert any("behind" in w for w in plan.warnings)
 
     def test_no_pr(self):
         state = _make_state()
-        plan = plan_ship(state, plan_id="p_test", message="ship", open_pr=False)
+        plan = plan_ship(
+            state, plan_id="p_test", message="ship", open_pr=False, config=_DEFAULT_CONFIG
+        )
         actions = [s.action for s in plan.steps]
         assert "pr_create" not in actions
         assert "pr_update" not in actions
 
     def test_merge_into_self_warning(self):
         state = _make_state(branch="main", default_branch="main")
-        plan = plan_ship(state, plan_id="p_test", message="ship", merge=True)
+        plan = plan_ship(
+            state, plan_id="p_test", message="ship", merge=True, config=_DEFAULT_CONFIG
+        )
         assert any("itself" in w for w in plan.warnings)
 
     def test_to_dict(self):
         state = _make_state()
-        plan = plan_ship(state, plan_id="p_test", message="ship it")
+        plan = plan_ship(state, plan_id="p_test", message="ship it", config=_DEFAULT_CONFIG)
         d = plan.to_dict()
         assert d["plan_id"] == "p_test"
         assert isinstance(d["steps"], list)
@@ -293,7 +391,7 @@ class TestPlanShip:
         state = _make_state(unstaged=["a.py", "b.py", "c.py"])
         plan = plan_ship(
             state, plan_id="p_test", message="ship",
-            files=["a.py"],
+            files=["a.py"], config=_DEFAULT_CONFIG,
         )
         stage_step = next(s for s in plan.steps if s.action == "stage")
         assert stage_step.params["files"] == ["a.py"]
@@ -303,7 +401,9 @@ class TestPlanShip:
         state = _make_state(
             staged=[], unstaged=[], untracked=[], dirty=False, ahead=2,
         )
-        plan = plan_ship(state, plan_id="p_test", message="ship", open_pr=False)
+        plan = plan_ship(
+            state, plan_id="p_test", message="ship", open_pr=False, config=_DEFAULT_CONFIG
+        )
         actions = [s.action for s in plan.steps]
         assert "stage" not in actions
         assert "commit" not in actions
@@ -314,7 +414,7 @@ class TestPlanShip:
         state = _make_state(
             staged=[], unstaged=[], untracked=[], dirty=False, ahead=2,
         )
-        plan = plan_ship(state, plan_id="p_test", message="ship")
+        plan = plan_ship(state, plan_id="p_test", message="ship", config=_DEFAULT_CONFIG)
         actions = [s.action for s in plan.steps]
         assert "commit" not in actions
         assert "push" in actions
@@ -325,7 +425,9 @@ class TestPlanShip:
         state = _make_state(
             staged=[], unstaged=[], untracked=[], dirty=False, ahead=0,
         )
-        plan = plan_ship(state, plan_id="p_test", message="ship", open_pr=False)
+        plan = plan_ship(
+            state, plan_id="p_test", message="ship", open_pr=False, config=_DEFAULT_CONFIG
+        )
         assert any("nothing" in w.lower() for w in plan.warnings)
         assert len(plan.steps) == 0
 
@@ -334,7 +436,9 @@ class TestPlanShip:
         state = _make_state(
             staged=[], unstaged=[], untracked=[], dirty=False, ahead=0,
         )
-        plan = plan_ship(state, plan_id="p_test", message="ship", open_pr=True)
+        plan = plan_ship(
+            state, plan_id="p_test", message="ship", open_pr=True, config=_DEFAULT_CONFIG
+        )
         actions = [s.action for s in plan.steps]
         assert "commit" not in actions
         assert "pr_create" in actions
@@ -342,8 +446,136 @@ class TestPlanShip:
     def test_files_empty_list_same_as_none(self):
         """ship with files=[] behaves same as files=None."""
         state = _make_state()
-        plan_with_none = plan_ship(state, plan_id="p1", message="ship", files=None)
-        plan_with_empty = plan_ship(state, plan_id="p2", message="ship", files=[])
+        plan_with_none = plan_ship(
+            state, plan_id="p1", message="ship", files=None, config=_DEFAULT_CONFIG
+        )
+        plan_with_empty = plan_ship(
+            state, plan_id="p2", message="ship", files=[], config=_DEFAULT_CONFIG
+        )
         actions_none = [s.action for s in plan_with_none.steps]
         actions_empty = [s.action for s in plan_with_empty.steps]
         assert actions_none == actions_empty
+
+    def test_pr_draft_adds_draft_to_pr_create(self):
+        state = _make_state()
+        config = JetsamConfig(pr_draft=True)
+        plan = plan_ship(state, plan_id="p_test", message="ship", config=config)
+        pr_step = next(s for s in plan.steps if s.action == "pr_create")
+        assert pr_step.params["draft"] is True
+
+    def test_pr_draft_false_sets_draft_false(self):
+        state = _make_state()
+        config = JetsamConfig(pr_draft=False)
+        plan = plan_ship(state, plan_id="p_test", message="ship", config=config)
+        pr_step = next(s for s in plan.steps if s.action == "pr_create")
+        assert pr_step.params["draft"] is False
+
+    def test_explicit_draft_overrides_config(self):
+        state = _make_state()
+        config = JetsamConfig(pr_draft=True)
+        plan = plan_ship(state, plan_id="p_test", message="ship", draft=False, config=config)
+        pr_step = next(s for s in plan.steps if s.action == "pr_create")
+        assert pr_step.params["draft"] is False
+
+    def test_ship_default_merge(self):
+        state = _make_state()
+        config = JetsamConfig(ship_default="merge")
+        plan = plan_ship(state, plan_id="p_test", message="ship", config=config)
+        actions = [s.action for s in plan.steps]
+        assert "pr_create" in actions
+        assert "pr_merge" in actions
+
+    def test_ship_default_pr(self):
+        state = _make_state()
+        config = JetsamConfig(ship_default="pr")
+        plan = plan_ship(state, plan_id="p_test", message="ship", config=config)
+        actions = [s.action for s in plan.steps]
+        assert "pr_create" in actions
+        assert "pr_merge" not in actions
+
+    def test_explicit_merge_overrides_ship_default(self):
+        state = _make_state()
+        config = JetsamConfig(ship_default="pr")
+        plan = plan_ship(state, plan_id="p_test", message="ship", merge=True, config=config)
+        actions = [s.action for s in plan.steps]
+        assert "pr_merge" in actions
+
+    def test_explicit_no_pr_overrides_ship_default(self):
+        state = _make_state()
+        config = JetsamConfig(ship_default="pr")
+        plan = plan_ship(state, plan_id="p_test", message="ship", open_pr=False, config=config)
+        actions = [s.action for s in plan.steps]
+        assert "pr_create" not in actions
+
+    def test_merge_strategy_in_pr_merge_step(self):
+        state = _make_state()
+        config = JetsamConfig(merge_strategy="rebase")
+        plan = plan_ship(state, plan_id="p_test", message="ship", merge=True, config=config)
+        merge_step = next(s for s in plan.steps if s.action == "pr_merge")
+        assert merge_step.params["strategy"] == "rebase"
+
+
+class TestPlanStart:
+    def test_config_branch_prefix(self):
+        state = _make_state()
+        config = JetsamConfig(branch_prefix="feature/")
+        plan = plan_start(state, plan_id="p_test", target="fix-bug", config=config)
+        assert plan.params["branch"] == "feature/fix-bug"
+
+    def test_explicit_prefix_overrides_config(self):
+        state = _make_state()
+        config = JetsamConfig(branch_prefix="feature/")
+        plan = plan_start(
+            state, plan_id="p_test", target="fix-bug",
+            branch_prefix="hotfix/", config=config,
+        )
+        assert plan.params["branch"] == "hotfix/fix-bug"
+
+    def test_empty_prefix_config_no_prefix(self):
+        state = _make_state()
+        config = JetsamConfig(branch_prefix="")
+        plan = plan_start(state, plan_id="p_test", target="fix-bug", config=config)
+        assert plan.params["branch"] == "fix-bug"
+
+    def test_worktree_always_uses_worktree(self):
+        state = _make_state(dirty=False)
+        config = JetsamConfig(worktree="always")
+        plan = plan_start(state, plan_id="p_test", target="fix-bug", config=config)
+        actions = [s.action for s in plan.steps]
+        assert "worktree_add" in actions
+        assert "checkout" not in actions
+
+    def test_worktree_never_uses_checkout(self):
+        state = _make_state(dirty=False)
+        config = JetsamConfig(worktree="never")
+        plan = plan_start(state, plan_id="p_test", target="fix-bug", config=config)
+        actions = [s.action for s in plan.steps]
+        assert "checkout" in actions
+        assert "worktree_add" not in actions
+
+    def test_worktree_auto_defaults_to_checkout(self):
+        state = _make_state(dirty=False)
+        config = JetsamConfig(worktree="auto")
+        plan = plan_start(state, plan_id="p_test", target="fix-bug", config=config)
+        actions = [s.action for s in plan.steps]
+        assert "checkout" in actions
+
+    def test_explicit_worktree_true_overrides_config_never(self):
+        state = _make_state(dirty=False)
+        config = JetsamConfig(worktree="never")
+        plan = plan_start(
+            state, plan_id="p_test", target="fix-bug",
+            worktree=True, config=config,
+        )
+        actions = [s.action for s in plan.steps]
+        assert "worktree_add" in actions
+
+    def test_explicit_worktree_false_overrides_config_always(self):
+        state = _make_state(dirty=False)
+        config = JetsamConfig(worktree="always")
+        plan = plan_start(
+            state, plan_id="p_test", target="fix-bug",
+            worktree=False, config=config,
+        )
+        actions = [s.action for s in plan.steps]
+        assert "checkout" in actions

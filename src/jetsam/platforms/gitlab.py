@@ -6,7 +6,7 @@ import json
 import subprocess
 from typing import Any
 
-from jetsam.platforms.base import CheckResult, IssueDetails, Platform, PRDetails
+from jetsam.platforms.base import CheckResult, IssueDetails, Platform, PlatformError, PRDetails
 
 
 class GitLabPlatform(Platform):
@@ -292,7 +292,3 @@ def _normalize_pipeline_status(status: str) -> str:
     if status in ("pending", "running", "created", "waiting_for_resource", "preparing"):
         return "pending"
     return "neutral"
-
-
-class PlatformError(Exception):
-    """Raised when a platform operation fails."""

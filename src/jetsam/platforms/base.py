@@ -140,3 +140,7 @@ class Platform(ABC):
     ) -> dict[str, str]:
         """Close an issue. reason: 'completed' or 'not-planned'."""
         ...
+
+
+class PlatformError(Exception):
+    """Raised when a platform operation fails."""

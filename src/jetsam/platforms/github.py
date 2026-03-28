@@ -6,7 +6,7 @@ import json
 import subprocess
 from typing import Any
 
-from jetsam.platforms.base import CheckResult, IssueDetails, Platform, PRDetails
+from jetsam.platforms.base import CheckResult, IssueDetails, Platform, PlatformError, PRDetails
 
 
 class GitHubPlatform(Platform):
@@ -330,5 +330,3 @@ def _normalize_check_status(status: str) -> str:
     return "neutral"
 
 
-class PlatformError(Exception):
-    """Raised when a platform operation fails."""

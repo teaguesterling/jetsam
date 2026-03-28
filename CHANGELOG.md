@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.1.0
+
+### New features
+- `jetsam config` verb — view, get, and set configuration from the CLI (P7-003)
+- `jetsam ship --draft` flag — create draft PRs from the command line (P7-001)
+
+### Quality improvements
+- Fix SHA extraction in executor — uses `git rev-parse` instead of fragile output parsing (P5-001)
+- Consolidate `PlatformError` into `platforms/base.py` — single import for all adapters (P5-002)
+- Add `py.typed` marker for PEP 561 type checking support (P5-003)
+- Add test coverage measurement with `pytest-cov` — 63% baseline (P5-004)
+- Trigger expired plan cleanup on MCP server start (P5-005)
+
 ## v1.0.0
 
 ### API stability

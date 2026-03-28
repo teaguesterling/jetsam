@@ -184,14 +184,8 @@ def _exec_commit(step: PlanStep, cwd: str | None) -> StepResult:
     result = run_git_sync(["commit", "-m", message], cwd=cwd)
     if result.ok:
         # Extract SHA from output
-        sha = ""
-        for line in result.stdout.splitlines():
-            if line.startswith("["):
-                parts = line.split()
-                for p in parts:
-                    if len(p) >= 7 and p.rstrip("]").replace("-", "").isalnum():
-                        sha = p.rstrip("]")
-                        break
+        sha_result = run_git_sync(["rev-parse", "--short", "HEAD"], cwd=cwd)
+        sha = sha_result.stdout.strip() if sha_result.ok else ""
         return StepResult(step="commit", ok=True, details={"sha": sha, "message": message})
     return StepResult(step="commit", ok=False, error=result.stderr.strip())
 

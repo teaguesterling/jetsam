@@ -16,6 +16,7 @@ from jetsam.core.state import build_state
 @click.option("--exclude", default=None, help="Glob pattern for files to exclude")
 @click.option("--to", "target", default=None, help="Target branch for PR (default: main/master)")
 @click.option("--no-pr", is_flag=True, help="Skip PR creation")
+@click.option("--draft", is_flag=True, help="Create PR as draft")
 @click.option("--merge", is_flag=True, help="Also merge the PR after creating it")
 @click.option("--dry-run", is_flag=True, help="Show plan without executing")
 @click.option("--execute", "auto_execute", is_flag=True, help="Execute without prompting")
@@ -27,6 +28,7 @@ def ship(
     exclude: str | None,
     target: str | None,
     no_pr: bool,
+    draft: bool,
     merge: bool,
     dry_run: bool,
     auto_execute: bool,
@@ -48,6 +50,7 @@ def ship(
         to=target,
         open_pr=False if no_pr else None,
         merge=merge or None,
+        draft=draft or None,
         config=config,
     )
 
@@ -125,7 +128,8 @@ def _show_plan_human(plan: Plan) -> None:
             click.echo(f"  Push: {remote}/{branch}")
         elif step.action == "pr_create":
             base = step.params.get("base", "main")
-            click.echo(f"  PR: Create \u2192 {base}")
+            draft_label = " (draft)" if step.params.get("draft") else ""
+            click.echo(f"  PR: Create \u2192 {base}{draft_label}")
         elif step.action == "pr_update":
             click.echo(f"  PR: Update #{step.params.get('number', '')}")
         elif step.action == "pr_merge":

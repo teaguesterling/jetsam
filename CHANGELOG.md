@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.0.0
+
+### API stability
+- All MCP tool error responses standardized to `{error, message, recoverable}` format (P6-002)
+- `Plan.to_dict()` includes `params`, `scope`, and `state_hash` (P6-003)
+- 9 configuration options wired into planners (P6-001): `auto_push`, `pr_draft`,
+  `ship_default`, `merge_strategy`, `branch_prefix`, `delete_on_merge`, `worktree`
+- 363 tests, 0 mypy strict errors, 0 lint errors
+
+### Platform support
+- GitHub: fully supported via `gh` CLI
+- GitLab: core operations supported via `glab` CLI; PR comment/review/close
+  operations raise `NotImplementedError` (planned for v1.1.0)
+
 ## v0.3.0
 
 Rollup release consolidating agent adoption improvements and bug fixes.

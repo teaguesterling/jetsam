@@ -10,7 +10,9 @@ mcp = FastMCP("jetsam", instructions=(
     "jetsam is a git workflow accelerator. "
     "Use workflow tools (status, save, sync, log, diff) for common operations. "
     "Mutating tools (save, sync) return plans that must be confirmed with confirm(). "
-    "Use the git tool for any git operation not covered by workflow tools."
+    "Use the git tool for any git operation not covered by workflow tools. "
+    "All errors are returned as {error, message, recoverable} dicts. "
+    "Check for the 'error' key to detect failures."
 ))
 
 register_tools(mcp)

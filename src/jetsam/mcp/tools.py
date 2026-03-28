@@ -45,6 +45,25 @@ def _get_store() -> PlanStore:
     return _plan_store
 
 
+def _no_platform_error() -> dict[str, Any]:
+    """Standard error for missing platform configuration."""
+    return JetsamError(
+        error="no_platform",
+        message="No platform configured.",
+        suggested_action="Configure a GitHub or GitLab remote.",
+        recoverable=False,
+    ).to_dict()
+
+
+def _no_pr_error(branch: str) -> dict[str, Any]:
+    """Standard error for missing PR."""
+    return JetsamError(
+        error="no_pr",
+        message=f"No PR found for branch '{branch}'.",
+        recoverable=True,
+    ).to_dict()
+
+
 def register_tools(mcp: FastMCP) -> None:
     """Register all jetsam tools with the MCP server."""
 
@@ -134,7 +153,7 @@ def register_tools(mcp: FastMCP) -> None:
         return plan.to_dict()
 
     @mcp.tool()
-    def log(n: int = 10, branch: str | None = None) -> list[dict[str, Any]]:
+    def log(n: int = 10, branch: str | None = None) -> list[dict[str, Any]] | dict[str, Any]:
         """Condensed commit history.
 
         Args:
@@ -148,7 +167,11 @@ def register_tools(mcp: FastMCP) -> None:
 
         result = run_git_sync(args)
         if not result.ok:
-            return [{"error": result.stderr.strip()}]
+            return JetsamError(
+                error="git_error",
+                message=result.stderr.strip(),
+                recoverable=True,
+            ).to_dict()
 
         entries = parse_log(result.stdout)
         return [asdict(e) for e in entries]
@@ -175,7 +198,11 @@ def register_tools(mcp: FastMCP) -> None:
 
             result = run_git_sync(args)
             if not result.ok:
-                return {"error": result.stderr.strip()}
+                return JetsamError(
+                    error="git_error",
+                    message=result.stderr.strip(),
+                    recoverable=True,
+                ).to_dict()
 
             parsed = parse_diff_numstat(result.stdout)
             return asdict(parsed)
@@ -187,6 +214,12 @@ def register_tools(mcp: FastMCP) -> None:
                 args.append(target)
 
             result = run_git_sync(args)
+            if not result.ok:
+                return JetsamError(
+                    error="git_error",
+                    message=result.stderr.strip(),
+                    recoverable=True,
+                ).to_dict()
             return {"diff": result.stdout, "ok": result.ok}
 
     @mcp.tool()
@@ -214,7 +247,7 @@ def register_tools(mcp: FastMCP) -> None:
         actual_branch = branch or state.branch
         platform = _get_platform(state)
         if platform is None:
-            return {"error": "no_platform", "message": "No platform configured"}
+            return _no_platform_error()
         pr = platform.pr_for_branch(actual_branch)
         if pr is None:
             return {"pr": None, "branch": actual_branch}
@@ -224,7 +257,7 @@ def register_tools(mcp: FastMCP) -> None:
     def pr_list(
         state: str = "open",
         author: str | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> list[dict[str, Any]] | dict[str, Any]:
         """List pull requests.
 
         Args:
@@ -234,12 +267,12 @@ def register_tools(mcp: FastMCP) -> None:
         repo_state = build_state()
         platform = _get_platform(repo_state)
         if platform is None:
-            return [{"error": "no_platform"}]
+            return _no_platform_error()
         prs = platform.pr_list(state=state, author=author)
         return [asdict(p) for p in prs]
 
     @mcp.tool()
-    def checks(pr_number: int | None = None) -> list[dict[str, Any]]:
+    def checks(pr_number: int | None = None) -> list[dict[str, Any]] | dict[str, Any]:
         """CI check status for current branch or a specific PR.
 
         Args:
@@ -248,13 +281,13 @@ def register_tools(mcp: FastMCP) -> None:
         repo_state = build_state()
         platform = _get_platform(repo_state)
         if platform is None:
-            return [{"error": "no_platform"}]
+            return _no_platform_error()
 
         actual_pr = pr_number
         if actual_pr is None:
             pr = platform.pr_for_branch(repo_state.branch)
             if pr is None:
-                return [{"error": "no_pr", "branch": repo_state.branch}]
+                return _no_pr_error(repo_state.branch)
             actual_pr = pr.number
 
         results = platform.pr_checks(actual_pr)
@@ -338,7 +371,7 @@ def register_tools(mcp: FastMCP) -> None:
     def issues(
         state: str = "open",
         labels: list[str] | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> list[dict[str, Any]] | dict[str, Any]:
         """List issues from the project tracker.
 
         Args:
@@ -348,7 +381,7 @@ def register_tools(mcp: FastMCP) -> None:
         repo_state = build_state()
         platform = _get_platform(repo_state)
         if platform is None:
-            return [{"error": "no_platform"}]
+            return _no_platform_error()
         issue_list = platform.issue_list(state=state, labels=labels)
         return [asdict(i) for i in issue_list]
 
@@ -368,14 +401,14 @@ def register_tools(mcp: FastMCP) -> None:
         repo_state = build_state()
         platform = _get_platform(repo_state)
         if platform is None:
-            return {"error": "no_platform", "message": "No platform configured"}
+            return _no_platform_error()
 
         actual_pr = pr_number
         if actual_pr is None:
             actual_branch = branch or repo_state.branch
             pr = platform.pr_for_branch(actual_branch)
             if pr is None:
-                return {"error": "no_pr", "branch": actual_branch}
+                return _no_pr_error(actual_branch)
             actual_pr = pr.number
 
         return platform.pr_comment(actual_pr, body)
@@ -398,14 +431,14 @@ def register_tools(mcp: FastMCP) -> None:
         repo_state = build_state()
         platform = _get_platform(repo_state)
         if platform is None:
-            return {"error": "no_platform", "message": "No platform configured"}
+            return _no_platform_error()
 
         actual_pr = pr_number
         if actual_pr is None:
             actual_branch = branch or repo_state.branch
             pr = platform.pr_for_branch(actual_branch)
             if pr is None:
-                return {"error": "no_pr", "branch": actual_branch}
+                return _no_pr_error(actual_branch)
             actual_pr = pr.number
 
         return platform.pr_review(actual_pr, body, event)
@@ -414,7 +447,7 @@ def register_tools(mcp: FastMCP) -> None:
     def pr_comments(
         branch: str | None = None,
         pr_number: int | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> list[dict[str, Any]] | dict[str, Any]:
         """Read comments and reviews on a pull request.
 
         Args:
@@ -424,14 +457,14 @@ def register_tools(mcp: FastMCP) -> None:
         repo_state = build_state()
         platform = _get_platform(repo_state)
         if platform is None:
-            return [{"error": "no_platform"}]
+            return _no_platform_error()
 
         actual_pr = pr_number
         if actual_pr is None:
             actual_branch = branch or repo_state.branch
             pr = platform.pr_for_branch(actual_branch)
             if pr is None:
-                return [{"error": "no_pr", "branch": actual_branch}]
+                return _no_pr_error(actual_branch)
             actual_pr = pr.number
 
         return platform.pr_comments(actual_pr)
@@ -452,7 +485,7 @@ def register_tools(mcp: FastMCP) -> None:
         repo_state = build_state()
         platform = _get_platform(repo_state)
         if platform is None:
-            return {"error": "no_platform", "message": "No platform configured"}
+            return _no_platform_error()
 
         return platform.issue_close(number, comment=comment, reason=reason)
 

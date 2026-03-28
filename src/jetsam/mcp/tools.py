@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
 from mcp.server.fastmcp import FastMCP
 
+from jetsam.config.manager import load_config
 from jetsam.core.executor import execute_plan
 from jetsam.core.output import JetsamError
 from jetsam.core.planner import (
@@ -23,7 +24,6 @@ from jetsam.core.planner import (
     plan_tidy,
 )
 from jetsam.core.plans import PlanStore, generate_plan_id, update_plan
-from jetsam.config.manager import load_config
 from jetsam.core.state import build_state
 from jetsam.git.parsers import parse_diff_numstat, parse_log
 from jetsam.git.wrapper import run_git_sync

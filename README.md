@@ -15,9 +15,9 @@ and ideal for AI agent integration via MCP.
 ## Installation
 
 ```bash
-pip install jetsam
+pip install jetsam-mcp
 # or
-uv pip install jetsam
+uv pip install jetsam-mcp
 ```
 
 ## Quick start

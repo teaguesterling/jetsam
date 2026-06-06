@@ -69,13 +69,13 @@ def register_tools(mcp: FastMCP) -> None:
     """Register all jetsam tools with the MCP server."""
 
     @mcp.tool()
-    def status() -> dict[str, Any]:
+    def status(cwd: str | None = None) -> dict[str, Any]:
         """Get repository state snapshot.
 
         Returns branch, dirty state, staged/unstaged/untracked files,
         ahead/behind counts, platform info, and PR details if available.
         """
-        state = build_state()
+        state = build_state(cwd=cwd)
         return state.to_dict()
 
     @mcp.tool()
@@ -84,6 +84,7 @@ def register_tools(mcp: FastMCP) -> None:
         include: str | None = None,
         exclude: str | None = None,
         files: list[str] | None = None,
+        cwd: str | None = None,
     ) -> dict[str, Any]:
         """Stage and commit changes. Returns a plan to confirm().
 
@@ -92,8 +93,11 @@ def register_tools(mcp: FastMCP) -> None:
             include: Glob pattern to filter files to stage.
             exclude: Glob pattern to filter files out.
             files: Explicit file paths to stage.
+            cwd: Working-directory override for this call. Defaults to
+                the MCP server's cwd. Use to operate on a non-cwd repo without
+                falling back to the `git` passthrough.
         """
-        state = build_state()
+        state = build_state(cwd=cwd)
         config = load_config(state.repo_root)
         pid = generate_plan_id()
         plan = plan_save(
@@ -105,14 +109,17 @@ def register_tools(mcp: FastMCP) -> None:
         return plan.to_dict()
 
     @mcp.tool()
-    def sync(strategy: str | None = None) -> dict[str, Any]:
+    def sync(strategy: str | None = None, cwd: str | None = None) -> dict[str, Any]:
         """Fetch, rebase/merge, and push. Returns a plan to confirm().
 
         Args:
             strategy: "rebase" or "merge". Defaults to rebase on feature
                      branches, merge on default branch.
+            cwd: Working-directory override for this call. Defaults to
+                the MCP server's cwd. Use to operate on a non-cwd repo without
+                falling back to the `git` passthrough.
         """
-        state = build_state()
+        state = build_state(cwd=cwd)
         pid = generate_plan_id()
         plan = plan_sync(state, plan_id=pid, strategy=strategy)
         _get_store().save(plan)
@@ -128,6 +135,7 @@ def register_tools(mcp: FastMCP) -> None:
         pr: bool | None = None,
         merge: bool | None = None,
         draft: bool | None = None,
+        cwd: str | None = None,
     ) -> dict[str, Any]:
         """Full pipeline: stage, commit, push, open PR. Returns a plan.
 
@@ -140,8 +148,11 @@ def register_tools(mcp: FastMCP) -> None:
             pr: Create/update a PR. Defaults to config value or true.
             merge: Also merge the PR after creating it. Defaults to config value or false.
             draft: Create the PR as a draft. Defaults to config value or false.
+            cwd: Working-directory override for this call. Defaults to
+                the MCP server's cwd. Use to operate on a non-cwd repo without
+                falling back to the `git` passthrough.
         """
-        state = build_state()
+        state = build_state(cwd=cwd)
         config = load_config(state.repo_root)
         pid = generate_plan_id()
         plan = plan_ship(
@@ -154,19 +165,22 @@ def register_tools(mcp: FastMCP) -> None:
         return plan.to_dict()
 
     @mcp.tool()
-    def log(n: int = 10, branch: str | None = None) -> list[dict[str, Any]] | dict[str, Any]:
+    def log(n: int = 10, branch: str | None = None, cwd: str | None = None) -> list[dict[str, Any]] | dict[str, Any]:
         """Condensed commit history.
 
         Args:
             n: Number of commits (default: 10).
             branch: Branch to show (default: current).
+            cwd: Working-directory override for this call. Defaults to
+                the MCP server's cwd. Use to operate on a non-cwd repo without
+                falling back to the `git` passthrough.
         """
         fmt = "%H%x00%h%x00%an%x00%aI%x00%s"
         args = ["log", f"--format={fmt}", f"-{n}"]
         if branch:
             args.append(branch)
 
-        result = run_git_sync(args)
+        result = run_git_sync(args, cwd=cwd)
         if not result.ok:
             return JetsamError(
                 error="git_error",
@@ -182,6 +196,7 @@ def register_tools(mcp: FastMCP) -> None:
         target: str | None = None,
         stat: bool = True,
         staged: bool = False,
+        cwd: str | None = None,
     ) -> dict[str, Any]:
         """Show diff. Returns stat summary by default, full diff if stat=false.
 
@@ -189,6 +204,9 @@ def register_tools(mcp: FastMCP) -> None:
             target: Diff target ref (default: working tree changes).
             stat: Return stat summary instead of full diff (default: true).
             staged: Diff staged changes instead of unstaged.
+            cwd: Working-directory override for this call. Defaults to
+                the MCP server's cwd. Use to operate on a non-cwd repo without
+                falling back to the `git` passthrough.
         """
         if stat:
             args = ["diff", "--numstat"]
@@ -197,7 +215,7 @@ def register_tools(mcp: FastMCP) -> None:
             if target:
                 args.append(target)
 
-            result = run_git_sync(args)
+            result = run_git_sync(args, cwd=cwd)
             if not result.ok:
                 return JetsamError(
                     error="git_error",
@@ -214,7 +232,7 @@ def register_tools(mcp: FastMCP) -> None:
             if target:
                 args.append(target)
 
-            result = run_git_sync(args)
+            result = run_git_sync(args, cwd=cwd)
             if not result.ok:
                 return JetsamError(
                     error="git_error",
@@ -224,27 +242,33 @@ def register_tools(mcp: FastMCP) -> None:
             return {"diff": result.stdout, "ok": result.ok}
 
     @mcp.tool()
-    def switch(branch: str, create: bool = False) -> dict[str, Any]:
+    def switch(branch: str, create: bool = False, cwd: str | None = None) -> dict[str, Any]:
         """Switch branches with automatic stash/unstash. Returns a plan.
 
         Args:
             branch: Target branch to switch to.
             create: Create the branch if it doesn't exist.
+            cwd: Working-directory override for this call. Defaults to
+                the MCP server's cwd. Use to operate on a non-cwd repo without
+                falling back to the `git` passthrough.
         """
-        state = build_state()
+        state = build_state(cwd=cwd)
         pid = generate_plan_id()
         plan = plan_switch(state, plan_id=pid, branch=branch, create=create)
         _get_store().save(plan)
         return plan.to_dict()
 
     @mcp.tool()
-    def pr_view(branch: str | None = None) -> dict[str, Any]:
+    def pr_view(branch: str | None = None, cwd: str | None = None) -> dict[str, Any]:
         """Get PR details for a branch.
 
         Args:
             branch: Branch to check (default: current branch).
+            cwd: Working-directory override for this call. Defaults to
+                the MCP server's cwd. Use to operate on a non-cwd repo without
+                falling back to the `git` passthrough.
         """
-        state = build_state()
+        state = build_state(cwd=cwd)
         actual_branch = branch or state.branch
         platform = _get_platform(state)
         if platform is None:
@@ -258,14 +282,18 @@ def register_tools(mcp: FastMCP) -> None:
     def pr_list(
         state: str = "open",
         author: str | None = None,
+        cwd: str | None = None,
     ) -> list[dict[str, Any]] | dict[str, Any]:
         """List pull requests.
 
         Args:
             state: Filter by state: open, closed, merged, all.
             author: Filter by author username.
+            cwd: Working-directory override for this call. Defaults to
+                the MCP server's cwd. Use to operate on a non-cwd repo without
+                falling back to the `git` passthrough.
         """
-        repo_state = build_state()
+        repo_state = build_state(cwd=cwd)
         platform = _get_platform(repo_state)
         if platform is None:
             return _no_platform_error()
@@ -273,13 +301,16 @@ def register_tools(mcp: FastMCP) -> None:
         return [asdict(p) for p in prs]
 
     @mcp.tool()
-    def checks(pr_number: int | None = None) -> list[dict[str, Any]] | dict[str, Any]:
+    def checks(pr_number: int | None = None, cwd: str | None = None) -> list[dict[str, Any]] | dict[str, Any]:
         """CI check status for current branch or a specific PR.
 
         Args:
             pr_number: PR number (default: PR for current branch).
+            cwd: Working-directory override for this call. Defaults to
+                the MCP server's cwd. Use to operate on a non-cwd repo without
+                falling back to the `git` passthrough.
         """
-        repo_state = build_state()
+        repo_state = build_state(cwd=cwd)
         platform = _get_platform(repo_state)
         if platform is None:
             return _no_platform_error()
@@ -300,6 +331,7 @@ def register_tools(mcp: FastMCP) -> None:
         worktree: bool | None = None,
         base: str | None = None,
         prefix: str | None = None,
+        cwd: str | None = None,
     ) -> dict[str, Any]:
         """Start work on an issue or feature. Returns a plan to confirm().
 
@@ -308,8 +340,11 @@ def register_tools(mcp: FastMCP) -> None:
             worktree: Create a worktree instead of switching branches.
             base: Base branch (default: main/master).
             prefix: Branch name prefix (e.g. "feature/").
+            cwd: Working-directory override for this call. Defaults to
+                the MCP server's cwd. Use to operate on a non-cwd repo without
+                falling back to the `git` passthrough.
         """
-        state = build_state()
+        state = build_state(cwd=cwd)
         config = load_config(state.repo_root)
         pid = generate_plan_id()
 
@@ -335,14 +370,18 @@ def register_tools(mcp: FastMCP) -> None:
     def finish(
         strategy: str | None = None,
         no_delete: bool | None = None,
+        cwd: str | None = None,
     ) -> dict[str, Any]:
         """Merge PR and clean up branch. Returns a plan to confirm().
 
         Args:
             strategy: Merge strategy: "squash", "merge", or "rebase".
             no_delete: Keep the branch after merging.
+            cwd: Working-directory override for this call. Defaults to
+                the MCP server's cwd. Use to operate on a non-cwd repo without
+                falling back to the `git` passthrough.
         """
-        state = build_state()
+        state = build_state(cwd=cwd)
         config = load_config(state.repo_root)
         pid = generate_plan_id()
 
@@ -360,9 +399,9 @@ def register_tools(mcp: FastMCP) -> None:
         return plan.to_dict()
 
     @mcp.tool()
-    def tidy() -> dict[str, Any]:
+    def tidy(cwd: str | None = None) -> dict[str, Any]:
         """Prune merged branches and stale refs. Returns a plan to confirm()."""
-        state = build_state()
+        state = build_state(cwd=cwd)
         pid = generate_plan_id()
         plan = plan_tidy(state, plan_id=pid)
         _get_store().save(plan)
@@ -372,14 +411,18 @@ def register_tools(mcp: FastMCP) -> None:
     def issues(
         state: str = "open",
         labels: list[str] | None = None,
+        cwd: str | None = None,
     ) -> list[dict[str, Any]] | dict[str, Any]:
         """List issues from the project tracker.
 
         Args:
             state: Filter by state: open, closed, all.
             labels: Filter by labels.
+            cwd: Working-directory override for this call. Defaults to
+                the MCP server's cwd. Use to operate on a non-cwd repo without
+                falling back to the `git` passthrough.
         """
-        repo_state = build_state()
+        repo_state = build_state(cwd=cwd)
         platform = _get_platform(repo_state)
         if platform is None:
             return _no_platform_error()
@@ -391,6 +434,7 @@ def register_tools(mcp: FastMCP) -> None:
         body: str,
         branch: str | None = None,
         pr_number: int | None = None,
+        cwd: str | None = None,
     ) -> dict[str, Any]:
         """Post a comment on a pull request.
 
@@ -398,8 +442,11 @@ def register_tools(mcp: FastMCP) -> None:
             body: Comment text.
             branch: Branch to find PR for (default: current branch).
             pr_number: PR number (overrides branch resolution).
+            cwd: Working-directory override for this call. Defaults to
+                the MCP server's cwd. Use to operate on a non-cwd repo without
+                falling back to the `git` passthrough.
         """
-        repo_state = build_state()
+        repo_state = build_state(cwd=cwd)
         platform = _get_platform(repo_state)
         if platform is None:
             return _no_platform_error()
@@ -420,6 +467,7 @@ def register_tools(mcp: FastMCP) -> None:
         body: str = "",
         branch: str | None = None,
         pr_number: int | None = None,
+        cwd: str | None = None,
     ) -> dict[str, Any]:
         """Submit a PR review.
 
@@ -428,8 +476,11 @@ def register_tools(mcp: FastMCP) -> None:
             body: Review body text. Required for request-changes and comment.
             branch: Branch to find PR for (default: current branch).
             pr_number: PR number (overrides branch resolution).
+            cwd: Working-directory override for this call. Defaults to
+                the MCP server's cwd. Use to operate on a non-cwd repo without
+                falling back to the `git` passthrough.
         """
-        repo_state = build_state()
+        repo_state = build_state(cwd=cwd)
         platform = _get_platform(repo_state)
         if platform is None:
             return _no_platform_error()
@@ -448,14 +499,18 @@ def register_tools(mcp: FastMCP) -> None:
     def pr_comments(
         branch: str | None = None,
         pr_number: int | None = None,
+        cwd: str | None = None,
     ) -> list[dict[str, Any]] | dict[str, Any]:
         """Read comments and reviews on a pull request.
 
         Args:
             branch: Branch to find PR for (default: current branch).
             pr_number: PR number (overrides branch resolution).
+            cwd: Working-directory override for this call. Defaults to
+                the MCP server's cwd. Use to operate on a non-cwd repo without
+                falling back to the `git` passthrough.
         """
-        repo_state = build_state()
+        repo_state = build_state(cwd=cwd)
         platform = _get_platform(repo_state)
         if platform is None:
             return _no_platform_error()
@@ -475,6 +530,7 @@ def register_tools(mcp: FastMCP) -> None:
         number: int,
         comment: str | None = None,
         reason: str = "completed",
+        cwd: str | None = None,
     ) -> dict[str, Any]:
         """Close an issue, optionally with a comment.
 
@@ -482,8 +538,11 @@ def register_tools(mcp: FastMCP) -> None:
             number: Issue number.
             comment: Optional comment to post before closing.
             reason: Close reason: "completed" (default) or "not-planned".
+            cwd: Working-directory override for this call. Defaults to
+                the MCP server's cwd. Use to operate on a non-cwd repo without
+                falling back to the `git` passthrough.
         """
-        repo_state = build_state()
+        repo_state = build_state(cwd=cwd)
         platform = _get_platform(repo_state)
         if platform is None:
             return _no_platform_error()
@@ -496,6 +555,7 @@ def register_tools(mcp: FastMCP) -> None:
         title: str | None = None,
         notes: str = "",
         draft: bool = False,
+        cwd: str | None = None,
     ) -> dict[str, Any]:
         """Tag, push, and create a platform release. Returns a plan to confirm().
 
@@ -504,8 +564,11 @@ def register_tools(mcp: FastMCP) -> None:
             title: Release title (defaults to tag name).
             notes: Release notes text.
             draft: Create as a draft release.
+            cwd: Working-directory override for this call. Defaults to
+                the MCP server's cwd. Use to operate on a non-cwd repo without
+                falling back to the `git` passthrough.
         """
-        state = build_state()
+        state = build_state(cwd=cwd)
         pid = generate_plan_id()
         plan = plan_release(
             state, plan_id=pid,

@@ -214,6 +214,72 @@ class TestNewToolsRegistration:
         assert "issue_close" in tool_names
 
 
+class TestCwdBinding:
+    """Workflow verbs accept a `cwd` arg and operate on that repo instead of
+    process cwd. Regression test for the bug 3/5 user personas hit where
+    `status` returned the wrong repo's state because the verb silently
+    dropped any path argument.
+    """
+
+    def test_status_honors_cwd_argument(
+        self, tmp_git_repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        # Make a SECOND repo at a different path.
+        other_repo = tmp_path / "other_repo"
+        other_repo.mkdir()
+        subprocess.run(["git", "init", "-b", "feature"], cwd=str(other_repo), check=True)
+        subprocess.run(["git", "config", "user.email", "x@y"], cwd=str(other_repo), check=True)
+        subprocess.run(["git", "config", "user.name", "x"], cwd=str(other_repo), check=True)
+        (other_repo / "f").write_text("x")
+        subprocess.run(["git", "add", "."], cwd=str(other_repo), check=True)
+        subprocess.run(["git", "commit", "-m", "init"], cwd=str(other_repo), check=True)
+
+        # Set process cwd / env to the FIRST repo. Without the cwd
+        # parameter, status would return state for tmp_git_repo (branch
+        # 'main'). With cwd=other_repo, it should return state for
+        # other_repo (branch 'feature').
+        monkeypatch.chdir(tmp_git_repo)
+        monkeypatch.delenv("GIT_DIR", raising=False)
+        monkeypatch.delenv("GIT_WORK_TREE", raising=False)
+
+        from jetsam.core.state import build_state
+
+        # No cwd: gets the first repo (tmp_git_repo, branch 'main').
+        state_default = build_state()
+        assert state_default.branch == "main"
+
+        # With cwd=other_repo: gets the other repo (branch 'feature').
+        state_other = build_state(cwd=str(other_repo))
+        assert state_other.branch == "feature"
+
+    def test_mcp_status_signature_includes_cwd(self):
+        from mcp.server.fastmcp import FastMCP
+        mcp = FastMCP("test")
+        mcp_tools.register_tools(mcp)
+        status_tool = mcp._tool_manager._tools["status"]
+        params = status_tool.parameters.get("properties", {})
+        assert "cwd" in params, (
+            "status() should expose `cwd` as an MCP parameter — without it, "
+            "workflow verbs silently fall back to process cwd."
+        )
+
+    def test_mcp_save_signature_includes_cwd(self):
+        from mcp.server.fastmcp import FastMCP
+        mcp = FastMCP("test")
+        mcp_tools.register_tools(mcp)
+        save_tool = mcp._tool_manager._tools["save"]
+        params = save_tool.parameters.get("properties", {})
+        assert "cwd" in params
+
+    def test_mcp_sync_signature_includes_cwd(self):
+        from mcp.server.fastmcp import FastMCP
+        mcp = FastMCP("test")
+        mcp_tools.register_tools(mcp)
+        sync_tool = mcp._tool_manager._tools["sync"]
+        params = sync_tool.parameters.get("properties", {})
+        assert "cwd" in params
+
+
 class TestErrorFormats:
     """Verify all error paths return standard JetsamError dicts."""
 

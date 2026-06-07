@@ -165,7 +165,9 @@ def register_tools(mcp: FastMCP) -> None:
         return plan.to_dict()
 
     @mcp.tool()
-    def log(n: int = 10, branch: str | None = None, cwd: str | None = None) -> list[dict[str, Any]] | dict[str, Any]:
+    def log(
+        n: int = 10, branch: str | None = None, cwd: str | None = None
+    ) -> list[dict[str, Any]] | dict[str, Any]:
         """Condensed commit history.
 
         Args:
@@ -301,7 +303,9 @@ def register_tools(mcp: FastMCP) -> None:
         return [asdict(p) for p in prs]
 
     @mcp.tool()
-    def checks(pr_number: int | None = None, cwd: str | None = None) -> list[dict[str, Any]] | dict[str, Any]:
+    def checks(
+        pr_number: int | None = None, cwd: str | None = None
+    ) -> list[dict[str, Any]] | dict[str, Any]:
         """CI check status for current branch or a specific PR.
 
         Args:

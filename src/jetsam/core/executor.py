@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -155,9 +156,9 @@ def _execute_step(
     # Some steps inspect earlier results (e.g. stash_pop checks if stash
     # actually stored anything). Register such actions in _STEPS_NEEDING_PRIOR.
     if step.action in _STEPS_NEEDING_PRIOR:
-        result: StepResult = executor(step, cwd, prior_results=prior_results)  # type: ignore[operator]
+        result: StepResult = executor(step, cwd, prior_results=prior_results)
     else:
-        result = executor(step, cwd)  # type: ignore[operator]
+        result = executor(step, cwd)
 
     # Add recovery suggestion for failed steps
     if not result.ok and result.error:
@@ -480,7 +481,7 @@ def _exec_release_create(step: PlanStep, cwd: str | None) -> StepResult:
         return StepResult(step="release_create", ok=False, error=str(e))
 
 
-_STEP_EXECUTORS = {
+_STEP_EXECUTORS: dict[str, Callable[..., StepResult]] = {
     "stage": _exec_stage,
     "commit": _exec_commit,
     "push": _exec_push,

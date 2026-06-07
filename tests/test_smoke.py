@@ -2,6 +2,7 @@
 
 from click.testing import CliRunner
 
+from jetsam import __version__
 from jetsam.cli.main import cli
 
 
@@ -9,7 +10,7 @@ def test_version():
     runner = CliRunner()
     result = runner.invoke(cli, ["--version"])
     assert result.exit_code == 0
-    assert "1.1.0" in result.output
+    assert __version__ in result.output
 
 
 def test_help():

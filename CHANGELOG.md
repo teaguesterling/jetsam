@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.1.1
+
+### Bug fixes
+- **Fix `stale_plan` on every `confirm()` for `sync`/`release`/`tidy`** (#12). jetsam's own `.jetsam/` plan-storage directory is untracked, and the unscoped state hash counted untracked files — so writing a plan invalidated it before it could be confirmed. `build_state` now excludes jetsam's own `.jetsam/` paths from the snapshot, so the repo state and its hash never depend on jetsam's internals.
+- `release` and `tidy` plans now set `exclude_remote_tracking=True` like `sync`/`finish`, so a background `git fetch` shifting ahead/behind between plan and confirm no longer triggers `stale_plan`.
+
 ## v1.1.0
 
 ### New features

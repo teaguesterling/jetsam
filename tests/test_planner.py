@@ -1,7 +1,15 @@
 """Tests for plan generation."""
 
 from jetsam.config.manager import JetsamConfig
-from jetsam.core.planner import plan_finish, plan_save, plan_ship, plan_start, plan_sync
+from jetsam.core.planner import (
+    plan_finish,
+    plan_release,
+    plan_save,
+    plan_ship,
+    plan_start,
+    plan_sync,
+    plan_tidy,
+)
 from jetsam.core.state import PRInfo, RepoState
 
 _DEFAULT_CONFIG = JetsamConfig()
@@ -579,3 +587,32 @@ class TestPlanStart:
         )
         actions = [s.action for s in plan.steps]
         assert "checkout" in actions
+
+
+class TestPlanReleaseTidyRemoteTracking:
+    """release/tidy must ignore ahead/behind like sync/finish (issue #12)."""
+
+    def test_release_hash_stable_when_ahead_behind_change(self):
+        state1 = _make_state(ahead=0, behind=0, dirty=False)
+        plan1 = plan_release(state1, plan_id="p_test", tag="v1.0.0")
+
+        state2 = _make_state(ahead=0, behind=3, dirty=False)
+        plan2 = plan_release(state2, plan_id="p_test", tag="v1.0.0")
+
+        assert plan1.exclude_remote_tracking is True
+        assert plan1.state_hash == plan2.state_hash
+
+    def test_tidy_hash_stable_when_ahead_behind_change(self):
+        state1 = _make_state(ahead=0, behind=0, dirty=False)
+        plan1 = plan_tidy(state1, plan_id="p_test")
+
+        state2 = _make_state(ahead=2, behind=3, dirty=False)
+        plan2 = plan_tidy(state2, plan_id="p_test")
+
+        assert plan1.exclude_remote_tracking is True
+        assert plan1.state_hash == plan2.state_hash
+
+    def test_release_to_dict_includes_exclude_remote_tracking(self):
+        state = _make_state(dirty=False)
+        plan = plan_release(state, plan_id="p_test", tag="v1.0.0")
+        assert plan.to_dict()["exclude_remote_tracking"] is True

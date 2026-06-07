@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from jetsam.core.state import RepoState, build_state
+from jetsam.core.state import RepoState, _is_jetsam_path, build_state
 
 
 class TestBuildState:
@@ -79,6 +79,38 @@ class TestBuildState:
         hash1 = state1.compute_hash(exclude_remote_tracking=True)
         hash2 = state2.compute_hash(exclude_remote_tracking=True)
         assert hash1 == hash2
+
+    def test_jetsam_dir_excluded_from_state(self, tmp_git_repo: Path):
+        """jetsam's own .jetsam/ dir must not appear in the snapshot."""
+        plans = tmp_git_repo / ".jetsam" / "plans"
+        plans.mkdir(parents=True)
+        (plans / "p_abc.json").write_text("{}\n")
+
+        state = build_state(cwd=str(tmp_git_repo))
+        assert not state.dirty
+        assert state.untracked == []
+        assert all(not p.startswith(".jetsam") for p in state.untracked)
+
+    def test_state_hash_stable_across_jetsam_writes(self, tmp_git_repo: Path):
+        """Writing a plan into .jetsam/ must not change the state hash —
+        this is the stale_plan-on-confirm regression (see issue #12)."""
+        hash_before = build_state(cwd=str(tmp_git_repo)).compute_hash()
+
+        plans = tmp_git_repo / ".jetsam" / "plans"
+        plans.mkdir(parents=True)
+        (plans / "p_abc.json").write_text('{"plan": 1}\n')
+
+        hash_after = build_state(cwd=str(tmp_git_repo)).compute_hash()
+        assert hash_before == hash_after
+
+    def test_is_jetsam_path(self):
+        assert _is_jetsam_path(".jetsam")
+        assert _is_jetsam_path(".jetsam/")
+        assert _is_jetsam_path(".jetsam/plans/p_abc.json")
+        assert _is_jetsam_path(".jetsam/config.yaml")
+        assert not _is_jetsam_path(".jetsamrc")
+        assert not _is_jetsam_path("src/.jetsam/x")
+        assert not _is_jetsam_path("README.md")
 
     def test_compute_hash_default_includes_remote_tracking(self):
         """Default compute_hash should still include ahead/behind."""

@@ -612,7 +612,10 @@ def plan_release(
         plan_id=plan_id,
         verb="release",
         steps=steps,
-        state_hash=state.compute_hash(),
+        # release tags/pushes; a background fetch may shift ahead/behind
+        # between plan and confirm, so ignore remote-tracking like sync/finish.
+        state_hash=state.compute_hash(exclude_remote_tracking=True),
+        exclude_remote_tracking=True,
         warnings=warnings,
         params={"tag": tag, "title": actual_title, "notes": notes, "draft": draft},
     )
@@ -643,7 +646,10 @@ def plan_tidy(
         plan_id=plan_id,
         verb="tidy",
         steps=steps,
-        state_hash=state.compute_hash(),
+        # tidy prunes remote-tracking refs; ahead/behind may shift via fetch
+        # between plan and confirm, so ignore remote-tracking like sync/finish.
+        state_hash=state.compute_hash(exclude_remote_tracking=True),
+        exclude_remote_tracking=True,
         warnings=warnings,
         params={},
     )

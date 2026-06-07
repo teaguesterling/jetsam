@@ -15,6 +15,16 @@ from jetsam.git.parsers import (
 from jetsam.git.wrapper import run_git_sync
 
 
+def _is_jetsam_path(path: str) -> bool:
+    """True if a status path belongs to jetsam's own state dir (.jetsam/).
+
+    git reports the untracked dir as ".jetsam/" in normal mode and individual
+    files like ".jetsam/plans/p_x.json" under -uall, so match both the dir
+    itself and anything beneath it.
+    """
+    return path == ".jetsam" or path.rstrip("/") == ".jetsam" or path.startswith(".jetsam/")
+
+
 @dataclass
 class PRInfo:
     """Pull request information for the current branch."""
@@ -141,14 +151,25 @@ def build_state(cwd: str | None = None) -> RepoState:
     # Detect worktree state
     worktree_info = _detect_worktree_info(cwd)
 
+    # jetsam stores its own plans/config under .jetsam/. That directory is
+    # untracked unless the repo gitignores it, and writing a plan creates or
+    # mutates it between plan-creation and confirm. Because the state hash
+    # counts untracked files, jetsam's own bookkeeping would otherwise
+    # invalidate every plan (stale_plan on confirm). Exclude jetsam's own paths
+    # so repo state — and its hash — never depends on jetsam's internals.
+    staged = [f.path for f in status.staged if not _is_jetsam_path(f.path)]
+    unstaged = [f.path for f in status.unstaged if not _is_jetsam_path(f.path)]
+    untracked = [p for p in status.untracked if not _is_jetsam_path(p)]
+    dirty = bool(staged or unstaged or untracked)
+
     state = RepoState(
         branch=status.branch.head,
         upstream=status.branch.upstream,
         default_branch=default_branch,
-        dirty=status.dirty,
-        staged=[f.path for f in status.staged],
-        unstaged=[f.path for f in status.unstaged],
-        untracked=status.untracked,
+        dirty=dirty,
+        staged=staged,
+        unstaged=unstaged,
+        untracked=untracked,
         ahead=status.branch.ahead,
         behind=status.branch.behind,
         stash_count=stash_count,

@@ -16,7 +16,6 @@ import os
 from dataclasses import dataclass, field, fields, replace
 from typing import Any
 
-
 _ENV_PREFIX = "JETSAM_"
 
 _VALID_LOG_LEVELS = {"debug", "info", "warn", "warning", "error"}
@@ -54,7 +53,7 @@ class JetsamRuntimeConfig:
     auto_confirm_safe_verbs: list[str] = field(default_factory=list)
 
     @classmethod
-    def from_env(cls, env: dict[str, str] | None = None) -> "JetsamRuntimeConfig":
+    def from_env(cls, env: dict[str, str] | None = None) -> JetsamRuntimeConfig:
         """Build a config seeded from environment variables.
 
         Variables read (each optional):
@@ -72,12 +71,12 @@ class JetsamRuntimeConfig:
 
         if v := e.get(f"{_ENV_PREFIX}ACTIVE_ROOT"):
             cfg.active_root = v
-        if v := e.get(f"{_ENV_PREFIX}LOG_LEVEL"):
-            if v.lower() in _VALID_LOG_LEVELS:
-                cfg.log_level = v.lower()
-        if v := e.get(f"{_ENV_PREFIX}DEFAULT_SYNC_STRATEGY"):
-            if v.lower() in _VALID_SYNC_STRATEGIES:
-                cfg.default_sync_strategy = v.lower()
+        v = e.get(f"{_ENV_PREFIX}LOG_LEVEL")
+        if v and v.lower() in _VALID_LOG_LEVELS:
+            cfg.log_level = v.lower()
+        v = e.get(f"{_ENV_PREFIX}DEFAULT_SYNC_STRATEGY")
+        if v and v.lower() in _VALID_SYNC_STRATEGIES:
+            cfg.default_sync_strategy = v.lower()
         if v := e.get(f"{_ENV_PREFIX}DEFAULT_BASE_BRANCH"):
             cfg.default_base_branch = v
         if v := e.get(f"{_ENV_PREFIX}SIGNING_REQUIRED"):
@@ -148,7 +147,8 @@ def _validate_one(key: str, value: Any) -> None:
     elif key == "default_sync_strategy":
         if not isinstance(value, str) or value.lower() not in _VALID_SYNC_STRATEGIES:
             raise ValueError(
-                f"default_sync_strategy must be one of {sorted(_VALID_SYNC_STRATEGIES)}, got {value!r}"
+                f"default_sync_strategy must be one of "
+                f"{sorted(_VALID_SYNC_STRATEGIES)}, got {value!r}"
             )
     elif key == "signing_required":
         if not isinstance(value, bool):
@@ -157,5 +157,6 @@ def _validate_one(key: str, value: Any) -> None:
         if not isinstance(value, list) or not all(isinstance(s, str) for s in value):
             raise ValueError(f"auto_confirm_safe_verbs must be list[str], got {value!r}")
     elif key in ("active_root", "default_base_branch"):
-        if value is not None and not isinstance(value, str):
-            raise ValueError(f"{key} must be str or None, got {type(value).__name__}")
+        if value is None or isinstance(value, str):
+            return
+        raise ValueError(f"{key} must be str or None, got {type(value).__name__}")

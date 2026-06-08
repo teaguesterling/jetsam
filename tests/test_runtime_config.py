@@ -169,6 +169,7 @@ class TestConfigToolViaMCP:
     @pytest.fixture(scope="class")
     def mcp(self):
         from mcp.server.fastmcp import FastMCP
+
         from jetsam.mcp.tools import register_tools
         server = FastMCP("test")
         register_tools(server)

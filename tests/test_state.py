@@ -34,8 +34,10 @@ class TestBuildState:
         state1 = build_state(cwd=str(tmp_git_repo))
         hash1 = state1.compute_hash()
 
-        # Create a new file
-        (tmp_git_repo / "new.py").write_text("new\n")
+        # Modify a TRACKED file — an unstaged change must change the hash.
+        # (A new *untracked* file deliberately does not; see
+        # test_unscoped_hash_stable_across_untracked_churn_e2e.)
+        (tmp_git_repo / "README.md").write_text("# Test\nmodified\n")
 
         state2 = build_state(cwd=str(tmp_git_repo))
         hash2 = state2.compute_hash()
@@ -100,6 +102,46 @@ class TestBuildState:
         plans.mkdir(parents=True)
         (plans / "p_abc.json").write_text('{"plan": 1}\n')
 
+        hash_after = build_state(cwd=str(tmp_git_repo)).compute_hash()
+        assert hash_before == hash_after
+
+    def test_unscoped_hash_ignores_untracked_churn(self):
+        """Untracked-file churn (agent-runtime dirs like .kibitzer/, .bird/) must
+        not change the unscoped hash — generalizes the #12 .jetsam/ fix so such
+        dirs don't cause stale_plan on start/sync."""
+        base = dict(
+            branch="feature", upstream="origin/feature", default_branch="main",
+            dirty=True, staged=[], unstaged=[], untracked=[".kibitzer/a"],
+            ahead=0, behind=0, stash_count=0,
+            platform="github", remote="user/repo",
+            remote_url="git@github.com:user/repo.git",
+            head_sha="abc123", repo_root="/tmp/repo",
+        )
+        s1 = RepoState(**base)
+        s2 = RepoState(**{**base, "untracked": [".kibitzer/a", ".bird/log", "scratch.txt"]})
+        assert s1.compute_hash() == s2.compute_hash()
+
+    def test_unscoped_hash_reflects_tracked_changes(self):
+        """Sanity: excluding untracked must not also drop tracked changes."""
+        base = dict(
+            branch="feature", upstream="origin/feature", default_branch="main",
+            dirty=False, staged=[], unstaged=[], untracked=[],
+            ahead=0, behind=0, stash_count=0,
+            platform="github", remote="user/repo",
+            remote_url="git@github.com:user/repo.git",
+            head_sha="abc123", repo_root="/tmp/repo",
+        )
+        s1 = RepoState(**base)
+        s2 = RepoState(**{**base, "staged": ["src/x.py"]})
+        assert s1.compute_hash() != s2.compute_hash()
+
+    def test_unscoped_hash_stable_across_untracked_churn_e2e(self, tmp_git_repo: Path):
+        """End-to-end: creating an arbitrary untracked dir must not change the
+        unscoped hash (the stale_plan-on-confirm bug for non-.jetsam dirs)."""
+        hash_before = build_state(cwd=str(tmp_git_repo)).compute_hash()
+        kb = tmp_git_repo / ".kibitzer"
+        kb.mkdir()
+        (kb / "session.json").write_text('{"a": 1}\n')
         hash_after = build_state(cwd=str(tmp_git_repo)).compute_hash()
         assert hash_before == hash_after
 

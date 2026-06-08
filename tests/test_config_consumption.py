@@ -9,7 +9,7 @@ import pytest
 
 from jetsam.config import runtime as rt
 from jetsam.config.runtime import JetsamRuntimeConfig, update_runtime
-from jetsam.core.planner import plan_save, plan_ship, plan_sync, plan_release
+from jetsam.core.planner import plan_release, plan_save, plan_sync
 from jetsam.core.state import build_state
 
 
@@ -30,7 +30,9 @@ def _init_repo(path: Path, on_branch: str = "feature/x", gpgsign: bool = False) 
         cwd=path, check=True, capture_output=True,
     )
     if on_branch != "main":
-        subprocess.run(["git", "checkout", "-b", on_branch], cwd=path, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "checkout", "-b", on_branch], cwd=path, check=True, capture_output=True
+        )
     subprocess.run(
         ["git", "config", "commit.gpgsign", "true" if gpgsign else "false"],
         cwd=path, check=True, capture_output=True,

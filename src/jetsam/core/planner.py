@@ -207,10 +207,7 @@ def plan_sync(
     if strategy is None:
         from jetsam.config.runtime import get_runtime
         runtime_strategy = get_runtime().default_sync_strategy
-        if is_default:
-            actual_strategy = "merge"
-        else:
-            actual_strategy = runtime_strategy
+        actual_strategy = "merge" if is_default else runtime_strategy
     else:
         actual_strategy = strategy
 

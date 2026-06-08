@@ -96,13 +96,20 @@ class RepoState:
                 "unstaged": sorted(relevant_unstaged),
             }
         else:
+            # Untracked files are deliberately excluded from the hash. They never
+            # affect the safety of unscoped verbs (start/sync/finish/tidy/ship/
+            # release don't touch untracked files), and agent-runtime dirs that
+            # sit untracked and churn between plan and confirm (e.g. .kibitzer/,
+            # .bird/) would otherwise invalidate every plan with stale_plan — the
+            # same failure #12 fixed for jetsam's own .jetsam/, now generalized.
+            # `dirty` is tracked-only here so untracked churn can't flip it either
+            # (staged/unstaged already capture tracked state).
             data = {
                 "branch": self.branch,
                 "head_sha": self.head_sha,
-                "dirty": self.dirty,
+                "dirty": bool(self.staged or self.unstaged),
                 "staged": sorted(self.staged),
                 "unstaged": sorted(self.unstaged),
-                "untracked": sorted(self.untracked),
             }
             if not exclude_remote_tracking:
                 data["ahead"] = self.ahead

@@ -671,3 +671,52 @@ def register_tools(mcp: FastMCP) -> None:
             "stderr": result.stderr,
             "returncode": result.returncode,
         }
+
+    @mcp.tool()
+    def config(
+        set: dict[str, Any] | None = None,
+        reset: bool = False,
+    ) -> dict[str, Any]:
+        """Read or update jetsam's in-memory session config.
+
+        Returns the full current config dict. With `set=`, merges values
+        and returns the new state. With `reset=true`, reverts to the
+        env-seeded values captured at server launch. Wiped on server
+        restart — no disk persistence.
+
+        Keys:
+            active_root         — fallback when a verb's cwd= is omitted
+            log_level           — debug | info | warn | error
+            default_sync_strategy — rebase | merge
+            default_base_branch — override for "main"
+            signing_required    — fail fast if GPG not configured
+            auto_confirm_safe_verbs — verbs that bypass plan→confirm
+
+        Env vars (seed at launch only): JETSAM_ACTIVE_ROOT,
+        JETSAM_LOG_LEVEL, JETSAM_DEFAULT_SYNC_STRATEGY,
+        JETSAM_DEFAULT_BASE_BRANCH, JETSAM_SIGNING_REQUIRED,
+        JETSAM_AUTO_CONFIRM_SAFE_VERBS.
+
+        Args:
+            set: Dict of keys to update. Unknown keys raise; invalid
+                values raise; either way the config is left unchanged.
+            reset: If True, reset to env-seeded values (ignores `set`).
+        """
+        from jetsam.config.runtime import get_runtime, reset_runtime, update_runtime
+
+        if reset:
+            cfg = reset_runtime()
+            return cfg.to_dict()
+
+        if set:
+            try:
+                cfg = update_runtime(set)
+            except ValueError as e:
+                return JetsamError(
+                    error="invalid_config",
+                    message=str(e),
+                    recoverable=True,
+                ).to_dict()
+            return cfg.to_dict()
+
+        return get_runtime().to_dict()

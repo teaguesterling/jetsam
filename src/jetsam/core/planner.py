@@ -9,6 +9,31 @@ from typing import Any
 
 from jetsam.config.manager import JetsamConfig, load_config
 from jetsam.core.state import RepoState
+from jetsam.git.wrapper import run_git_sync
+
+
+def _signing_required_check(state: RepoState, op: str) -> list[str]:
+    """If runtime.signing_required is set, fail fast if gpg signing is off.
+
+    Returns a single warning string if signing is required but not
+    configured in the repo, else an empty list. Callers should refuse
+    to add any execution steps when this returns non-empty.
+    """
+    from jetsam.config.runtime import get_runtime
+    if not get_runtime().signing_required:
+        return []
+    result = run_git_sync(
+        ["config", "--get", "commit.gpgsign"], cwd=state.repo_root,
+    )
+    val = result.stdout.strip().lower() if result.ok else ""
+    if val in ("true", "1", "yes"):
+        return []
+    return [
+        f"Refusing to plan {op}: runtime config signing_required is set, "
+        f"but commit.gpgsign is not enabled in this repo "
+        f"(got {val!r}). Set `git config commit.gpgsign true` or unset "
+        f"signing_required via `config(set={{'signing_required': false}})`."
+    ]
 
 
 @dataclass
@@ -62,6 +87,16 @@ def plan_save(
     """Generate a plan for the 'save' verb (stage + commit)."""
     if config is None:
         config = load_config(state.repo_root)
+
+    # Fail fast if signing is required but commit.gpgsign isn't set.
+    signing_warnings = _signing_required_check(state, "save")
+    if signing_warnings:
+        return Plan(
+            plan_id=plan_id, verb="save", steps=[],
+            state_hash=state.compute_hash(),
+            warnings=signing_warnings,
+            params={"message": message, "include": include, "exclude": exclude, "files": files},
+        )
 
     # Determine which files to stage
     target_files = _resolve_files(state, include, exclude, files)
@@ -165,7 +200,19 @@ def plan_sync(
 
     # Fetch
     steps.append(PlanStep(action="fetch", params={"remote": "origin"}))
-    actual_strategy = strategy or ("merge" if is_default else "rebase")
+    # Strategy precedence: explicit > runtime config > branch-based default.
+    # default_sync_strategy applies to feature branches; default branch
+    # always uses merge (rebasing on a publicly-pushed default branch is
+    # almost always wrong).
+    if strategy is None:
+        from jetsam.config.runtime import get_runtime
+        runtime_strategy = get_runtime().default_sync_strategy
+        if is_default:
+            actual_strategy = "merge"
+        else:
+            actual_strategy = runtime_strategy
+    else:
+        actual_strategy = strategy
 
     if state.upstream:
         if actual_strategy == "rebase":
@@ -231,6 +278,15 @@ def plan_ship(
     """Generate a plan for the 'ship' verb (stage + commit + push + PR)."""
     if config is None:
         config = load_config(state.repo_root)
+
+    signing_warnings = _signing_required_check(state, "ship")
+    if signing_warnings:
+        return Plan(
+            plan_id=plan_id, verb="ship", steps=[],
+            state_hash=state.compute_hash(),
+            warnings=signing_warnings,
+            params={"message": message, "include": include, "exclude": exclude, "files": files},
+        )
 
     # Resolve defaults from config when not explicitly set
     if open_pr is None and merge is None:
@@ -576,6 +632,15 @@ def plan_release(
         notes: Release notes text.
         draft: Create as a draft release.
     """
+    signing_warnings = _signing_required_check(state, "release")
+    if signing_warnings:
+        return Plan(
+            plan_id=plan_id, verb="release", steps=[],
+            state_hash=state.compute_hash(),
+            warnings=signing_warnings,
+            params={"tag": tag, "title": title, "notes": notes, "draft": draft},
+        )
+
     steps: list[PlanStep] = []
     warnings: list[str] = []
     actual_title = title or tag

@@ -643,7 +643,7 @@ def register_tools(mcp: FastMCP) -> None:
                 recoverable=True,
             ).to_dict()
 
-        result = execute_plan(plan)
+        result = execute_plan(plan, cwd=plan.repo_root or None)
         store.delete(id)
         return result.to_dict()
 

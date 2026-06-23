@@ -59,6 +59,7 @@ class Plan:
     exclude_remote_tracking: bool = False  # if True, hash ignores ahead/behind
     warnings: list[str] = field(default_factory=list)
     params: dict[str, Any] = field(default_factory=dict)
+    repo_root: str = ""  # repo the plan was built for; confirm validates/executes here
 
     def to_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {
@@ -93,7 +94,7 @@ def plan_save(
     if signing_warnings:
         return Plan(
             plan_id=plan_id, verb="save", steps=[],
-            state_hash=state.compute_hash(),
+            repo_root=state.repo_root, state_hash=state.compute_hash(),
             warnings=signing_warnings,
             params={"message": message, "include": include, "exclude": exclude, "files": files},
         )
@@ -108,7 +109,7 @@ def plan_save(
             plan_id=plan_id,
             verb="save",
             steps=[],
-            state_hash=state.compute_hash(),
+            repo_root=state.repo_root, state_hash=state.compute_hash(),
             warnings=warnings,
             params={"message": message, "include": include, "exclude": exclude, "files": files},
         )
@@ -149,7 +150,7 @@ def plan_save(
         plan_id=plan_id,
         verb="save",
         steps=steps,
-        state_hash=state.compute_hash(scope=scope),
+        repo_root=state.repo_root, state_hash=state.compute_hash(scope=scope),
         scope=scope,
         warnings=warnings,
         params={"message": message, "include": include, "exclude": exclude, "files": files},
@@ -192,7 +193,7 @@ def plan_sync(
             plan_id=plan_id,
             verb="sync",
             steps=steps,
-            state_hash=state.compute_hash(exclude_remote_tracking=True),
+            repo_root=state.repo_root, state_hash=state.compute_hash(exclude_remote_tracking=True),
             exclude_remote_tracking=True,
             warnings=warnings,
             params={"strategy": strategy},
@@ -252,7 +253,7 @@ def plan_sync(
         plan_id=plan_id,
         verb="sync",
         steps=steps,
-        state_hash=state.compute_hash(exclude_remote_tracking=True),
+        repo_root=state.repo_root, state_hash=state.compute_hash(exclude_remote_tracking=True),
         exclude_remote_tracking=True,
         warnings=warnings,
         params={"strategy": strategy},
@@ -280,7 +281,7 @@ def plan_ship(
     if signing_warnings:
         return Plan(
             plan_id=plan_id, verb="ship", steps=[],
-            state_hash=state.compute_hash(),
+            repo_root=state.repo_root, state_hash=state.compute_hash(),
             warnings=signing_warnings,
             params={"message": message, "include": include, "exclude": exclude, "files": files},
         )
@@ -389,7 +390,7 @@ def plan_ship(
         plan_id=plan_id,
         verb="ship",
         steps=steps,
-        state_hash=state.compute_hash(scope=scope),
+        repo_root=state.repo_root, state_hash=state.compute_hash(scope=scope),
         scope=scope,
         warnings=warnings,
         params={
@@ -429,7 +430,7 @@ def plan_switch(
         plan_id=plan_id,
         verb="switch",
         steps=steps,
-        state_hash=state.compute_hash(),
+        repo_root=state.repo_root, state_hash=state.compute_hash(),
         warnings=warnings,
         params={"branch": branch, "create": create},
     )
@@ -511,7 +512,7 @@ def plan_start(
         plan_id=plan_id,
         verb="start",
         steps=steps,
-        state_hash=state.compute_hash(),
+        repo_root=state.repo_root, state_hash=state.compute_hash(),
         warnings=warnings,
         params={
             "target": target,
@@ -555,7 +556,7 @@ def plan_finish(
             plan_id=plan_id,
             verb="finish",
             steps=[],
-            state_hash=state.compute_hash(exclude_remote_tracking=True),
+            repo_root=state.repo_root, state_hash=state.compute_hash(exclude_remote_tracking=True),
             exclude_remote_tracking=True,
             warnings=warnings,
             params={"strategy": strategy, "no_delete": no_delete},
@@ -602,7 +603,7 @@ def plan_finish(
         plan_id=plan_id,
         verb="finish",
         steps=steps,
-        state_hash=state.compute_hash(exclude_remote_tracking=True),
+        repo_root=state.repo_root, state_hash=state.compute_hash(exclude_remote_tracking=True),
         exclude_remote_tracking=True,
         warnings=warnings,
         params={
@@ -633,7 +634,7 @@ def plan_release(
     if signing_warnings:
         return Plan(
             plan_id=plan_id, verb="release", steps=[],
-            state_hash=state.compute_hash(),
+            repo_root=state.repo_root, state_hash=state.compute_hash(),
             warnings=signing_warnings,
             params={"tag": tag, "title": title, "notes": notes, "draft": draft},
         )
@@ -676,7 +677,7 @@ def plan_release(
         steps=steps,
         # release tags/pushes; a background fetch may shift ahead/behind
         # between plan and confirm, so ignore remote-tracking like sync/finish.
-        state_hash=state.compute_hash(exclude_remote_tracking=True),
+        repo_root=state.repo_root, state_hash=state.compute_hash(exclude_remote_tracking=True),
         exclude_remote_tracking=True,
         warnings=warnings,
         params={"tag": tag, "title": actual_title, "notes": notes, "draft": draft},
@@ -710,7 +711,7 @@ def plan_tidy(
         steps=steps,
         # tidy prunes remote-tracking refs; ahead/behind may shift via fetch
         # between plan and confirm, so ignore remote-tracking like sync/finish.
-        state_hash=state.compute_hash(exclude_remote_tracking=True),
+        repo_root=state.repo_root, state_hash=state.compute_hash(exclude_remote_tracking=True),
         exclude_remote_tracking=True,
         warnings=warnings,
         params={},

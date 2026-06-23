@@ -40,6 +40,7 @@ class PlanStore:
             "exclude_remote_tracking": plan.exclude_remote_tracking,
             "warnings": plan.warnings,
             "params": plan.params,
+            "repo_root": plan.repo_root,
             "created_at": time.time(),
         }
         path = self.plans_dir / f"{plan.plan_id}.json"
@@ -76,6 +77,7 @@ class PlanStore:
             exclude_remote_tracking=data.get("exclude_remote_tracking", False),
             warnings=data.get("warnings", []),
             params=data.get("params", {}),
+            repo_root=data.get("repo_root", ""),
         )
 
     def delete(self, plan_id: str) -> None:

@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.3
+
+### Bug fixes
+- **Fix `stale_plan` on cross-repo `confirm()`** in multi-repo sessions. A plan from `save`/`sync`/etc. recorded its `state_hash` for the repo at `cwd`, but `confirm()` re-validated and executed against the MCP server's default `active_root` — so any session touching more than one repo failed `stale_plan` on every cross-repo `confirm()`. Plans now persist their `repo_root`, and `confirm` validates and executes in the plan's own repo. (Sequel to the v1.1.1 `.jetsam/` hash fix — same lineage, different cause.)
+
 ## v1.1.1
 
 ### Bug fixes

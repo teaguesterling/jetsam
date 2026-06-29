@@ -33,3 +33,4 @@ build/
 
 # docs
 docs/_build/
+uv.lock

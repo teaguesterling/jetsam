@@ -22,6 +22,15 @@ class JetsamConfig:
     worktree: str = "auto"  # auto | always | never
     worktree_dir: str = ".worktrees"  # relative to repo root
     commit_message: str = "heuristic"  # heuristic | prompt | llm
+    # Auto-stage (files=None) never sweeps these — agent/tool runtime churn that
+    # is rarely an intentional commit. Globs (*.sqlite) or dir names (.kibitzer
+    # matches anything under it). Has no effect when files are named explicitly.
+    noise_paths: list[str] = field(
+        default_factory=lambda: [
+            ".jetsam", ".kibitzer", ".bird", ".riggs",
+            "*.sqlite", "*.sqlite-wal", "*.sqlite-shm", "*.sqlite-journal",
+        ]
+    )
 
     # Runtime state (not from config file)
     config_path: str | None = field(default=None, repr=False)

@@ -451,8 +451,8 @@ class TestPlanShip:
         assert "commit" not in actions
         assert "pr_create" in actions
 
-    def test_files_empty_list_same_as_none(self):
-        """ship with files=[] behaves same as files=None."""
+    def test_files_empty_list_distinct_from_none(self):
+        """ship with files=[] stages nothing; files=None auto-stages (sentinel split)."""
         state = _make_state()
         plan_with_none = plan_ship(
             state, plan_id="p1", message="ship", files=None, config=_DEFAULT_CONFIG
@@ -460,9 +460,8 @@ class TestPlanShip:
         plan_with_empty = plan_ship(
             state, plan_id="p2", message="ship", files=[], config=_DEFAULT_CONFIG
         )
-        actions_none = [s.action for s in plan_with_none.steps]
-        actions_empty = [s.action for s in plan_with_empty.steps]
-        assert actions_none == actions_empty
+        assert "stage" in [s.action for s in plan_with_none.steps]
+        assert "stage" not in [s.action for s in plan_with_empty.steps]
 
     def test_pr_draft_adds_draft_to_pr_create(self):
         state = _make_state()
@@ -616,3 +615,50 @@ class TestPlanReleaseTidyRemoteTracking:
         state = _make_state(dirty=False)
         plan = plan_release(state, plan_id="p_test", tag="v1.0.0")
         assert plan.to_dict()["exclude_remote_tracking"] is True
+
+
+class TestFilesSentinelAndNoise:
+    """files=None (auto-stage) vs files=[] (stage nothing); noise_paths exclusion."""
+
+    def test_ship_files_empty_is_push_and_pr_only(self):
+        # already committed (nothing staged) + commits ahead → just push + PR,
+        # no spurious commit. This is the regression the files=[] sentinel fixes.
+        state = _make_state(staged=[], unstaged=["modified.py"], ahead=1)
+        plan = plan_ship(state, plan_id="p_test", message="x", files=[], config=_DEFAULT_CONFIG)
+        assert [s.action for s in plan.steps] == ["push", "pr_create"]
+
+    def test_ship_files_none_auto_stages(self):
+        state = _make_state(staged=[], unstaged=["modified.py"], ahead=0)
+        plan = plan_ship(state, plan_id="p_test", message="x", files=None, config=_DEFAULT_CONFIG)
+        assert "stage" in [s.action for s in plan.steps]
+
+    def test_save_files_empty_stages_nothing(self):
+        state = _make_state(staged=[], unstaged=["modified.py"])
+        plan = plan_save(state, plan_id="p_test", message="x", files=[], config=_DEFAULT_CONFIG)
+        assert all(s.action != "stage" for s in plan.steps)
+
+    def test_save_files_none_vs_empty_distinct(self):
+        state = _make_state(staged=[], unstaged=["modified.py"])
+        none_plan = plan_save(state, plan_id="p1", message="x", files=None, config=_DEFAULT_CONFIG)
+        empty_plan = plan_save(state, plan_id="p2", message="x", files=[], config=_DEFAULT_CONFIG)
+        assert any(s.action == "stage" for s in none_plan.steps)
+        assert all(s.action != "stage" for s in empty_plan.steps)
+
+    def test_noise_paths_excluded_from_autostage(self):
+        state = _make_state(
+            staged=[],
+            unstaged=["real.py", ".kibitzer/state.json", ".kibitzer/store.sqlite", "data.sqlite"],
+        )
+        plan = plan_save(state, plan_id="p_test", message="x", files=None, config=_DEFAULT_CONFIG)
+        stage = next(s for s in plan.steps if s.action == "stage")
+        assert stage.params["files"] == ["real.py"]
+
+    def test_explicit_files_bypass_noise(self):
+        # naming a noise path explicitly still stages it — files= is intentional
+        state = _make_state(staged=[], unstaged=[".kibitzer/state.json"])
+        plan = plan_save(
+            state, plan_id="p_test", message="x",
+            files=[".kibitzer/state.json"], config=_DEFAULT_CONFIG,
+        )
+        stage = next(s for s in plan.steps if s.action == "stage")
+        assert stage.params["files"] == [".kibitzer/state.json"]

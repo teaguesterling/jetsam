@@ -92,7 +92,9 @@ def register_tools(mcp: FastMCP) -> None:
             message: Commit message. Auto-generated if omitted.
             include: Glob pattern to filter files to stage.
             exclude: Glob pattern to filter files out.
-            files: Explicit file paths to stage.
+            files: Explicit file paths to stage. Pass [] to stage nothing
+                (e.g. ship(files=[]) = push + PR only on an already-committed
+                branch); None (default) auto-stages modified tracked files.
             cwd: Working-directory override for this call. Defaults to
                 the MCP server's cwd. Use to operate on a non-cwd repo without
                 falling back to the `git` passthrough.
@@ -143,7 +145,9 @@ def register_tools(mcp: FastMCP) -> None:
             message: Commit message and PR title.
             include: Glob pattern to filter files to stage.
             exclude: Glob pattern to filter files out.
-            files: Explicit file paths to stage.
+            files: Explicit file paths to stage. Pass [] to stage nothing
+                (e.g. ship(files=[]) = push + PR only on an already-committed
+                branch); None (default) auto-stages modified tracked files.
             to: Target branch for PR (default: main/master).
             pr: Create/update a PR. Defaults to config value or true.
             merge: Also merge the PR after creating it. Defaults to config value or false.

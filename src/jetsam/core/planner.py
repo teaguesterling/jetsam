@@ -85,7 +85,11 @@ def plan_save(
     files: list[str] | None = None,
     config: JetsamConfig | None = None,
 ) -> Plan:
-    """Generate a plan for the 'save' verb (stage + commit)."""
+    """Generate a plan for the 'save' verb (stage + commit).
+
+    files=None auto-stages modified tracked files (minus config noise_paths);
+    files=[] stages nothing.
+    """
     if config is None:
         config = load_config(state.repo_root)
 
@@ -100,7 +104,7 @@ def plan_save(
         )
 
     # Determine which files to stage
-    target_files = _resolve_files(state, include, exclude, files)
+    target_files = _resolve_files(state, include, exclude, files, noise_paths=config.noise_paths)
     warnings: list[str] = []
 
     if not target_files and not state.staged:
@@ -273,7 +277,11 @@ def plan_ship(
     draft: bool | None = None,
     config: JetsamConfig | None = None,
 ) -> Plan:
-    """Generate a plan for the 'ship' verb (stage + commit + push + PR)."""
+    """Generate a plan for the 'ship' verb (stage + commit + push + PR).
+
+    files=None auto-stages modified tracked files; files=[] stages nothing, so
+    an already-committed branch ships as push + PR only.
+    """
     if config is None:
         config = load_config(state.repo_root)
 
@@ -308,7 +316,7 @@ def plan_ship(
     target_branch = to or state.default_branch
 
     # Stage files
-    target_files = _resolve_files(state, include, exclude, files)
+    target_files = _resolve_files(state, include, exclude, files, noise_paths=config.noise_paths)
     if target_files:
         steps.append(PlanStep(action="stage", params={"files": target_files}))
 
@@ -736,14 +744,35 @@ def _slugify(text: str, max_length: int = 50) -> str:
     return text
 
 
+def _is_noise(path: str, patterns: list[str]) -> bool:
+    """True if `path` matches a noise pattern: a glob (``*.sqlite``) or a
+    directory name/prefix (``.kibitzer`` matches anything under it, at any depth)."""
+    padded = "/" + path + "/"
+    for p in patterns:
+        if fnmatch.fnmatch(path, p):
+            return True
+        seg = p.strip("/")
+        if seg and "/" + seg + "/" in padded:
+            return True
+    return False
+
+
 def _resolve_files(
     state: RepoState,
     include: str | None = None,
     exclude: str | None = None,
     files: list[str] | None = None,
+    noise_paths: list[str] | None = None,
 ) -> list[str]:
-    """Resolve which files to stage based on include/exclude/files patterns."""
-    if files:
+    """Resolve which files to stage based on include/exclude/files patterns.
+
+    `files` carries two distinct sentinels:
+      * ``None`` (default) — no preference; auto-detect modified tracked files.
+      * ``[]`` — explicitly stage nothing (e.g. ``ship(files=[])`` = push + PR only).
+    `noise_paths` are agent/tool runtime artifacts the auto-detect path never
+    sweeps; they have no effect when `files` is given explicitly.
+    """
+    if files is not None:
         if exclude:
             return [f for f in files if not fnmatch.fnmatch(f, exclude)]
         return files
@@ -758,8 +787,12 @@ def _resolve_files(
         candidates = [f for f in candidates if not fnmatch.fnmatch(f, exclude)]
 
     # If no include pattern, default to modified tracked files only (not untracked)
-    if not include and not files:
+    if not include:
         candidates = [f for f in candidates if f in state.unstaged]
+
+    # Never auto-stage agent/tool runtime churn (.kibitzer/, .jetsam/, *.sqlite …)
+    if noise_paths:
+        candidates = [f for f in candidates if not _is_noise(f, noise_paths)]
 
     return candidates
 

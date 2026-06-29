@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.1.4
+
+### Bug fixes
+- **`save`/`ship` no longer collapse `files=[]` into `files=None`.** `_resolve_files` gated on `if files:`, so an explicit empty list ("stage nothing") fell through to auto-detect and swept all modified tracked files. Now `files is not None` is honored: `ship(files=[])` on an already-committed branch yields exactly `[push, pr_create]` — no spurious commit.
+
+### Features
+- **`noise_paths` config** — auto-stage (`files=None`) never sweeps these globs/dirs (default: `.jetsam`, `.kibitzer`, `.bird`, `.riggs`, `*.sqlite*`), so agent/tool runtime churn stays out of commits. Naming a path explicitly via `files=` still stages it.
+
 ## v1.1.3
 
 ### Bug fixes

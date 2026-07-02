@@ -4,6 +4,7 @@
 
 ### Bug fixes
 - **`finish` actually merges the PR now.** `build_state()` never populates `state.pr` (the lookup costs a platform round-trip), so `plan_finish`'s `if state.pr:` never fired — from both the MCP tool and the CLI verb, `finish` silently planned only `checkout + fetch + branch_delete` and left the PR open, while reading as if it had shipped. Both entry points now call the new `attach_open_pr()` (open PRs only — `pr_for_branch` also returns merged/closed ones, which must never be re-merged), and `plan_finish` warns explicitly when there is no open PR instead of silently degrading to local cleanup.
+- **`ssh://` remotes are recognized.** `parse_remote_url` only matched scp-style (`git@host:path`) and `https://` URLs, so a repo cloned with the explicit `ssh://git@github.com/owner/repo.git` spelling got platform "unknown" and every platform op failed with "No platform configured" — jetsam's own origin uses this form. Now matched (including optional user@ and :port).
 - **`mergeable` is real data now.** The GitHub adapter never requested the `mergeable` field from `gh`, so `pr_view`/`pr_list`/`pr_for_branch` reported `mergeable: false` for every PR regardless of actual state. The field is now requested and mapped; a new `mergeable_state` ("mergeable" / "conflicting" / "unknown") preserves gh's tri-state so callers can tell a real conflict from GitHub still computing.
 
 ## v1.1.4

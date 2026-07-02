@@ -198,6 +198,22 @@ class TestParseRemoteUrl:
         assert platform == "gitlab"
         assert path == "org/project"
 
+    def test_github_ssh_scheme(self):
+        # `git clone ssh://...` spelling — jetsam's own origin uses this form
+        platform, path = parse_remote_url("ssh://git@github.com/user/repo.git")
+        assert platform == "github"
+        assert path == "user/repo"
+
+    def test_github_ssh_scheme_no_git_suffix(self):
+        platform, path = parse_remote_url("ssh://git@github.com/user/repo")
+        assert platform == "github"
+        assert path == "user/repo"
+
+    def test_ssh_scheme_with_port(self):
+        platform, path = parse_remote_url("ssh://git@gitlab.com:2222/org/project.git")
+        assert platform == "gitlab"
+        assert path == "org/project"
+
     def test_unknown(self):
         platform, _path = parse_remote_url("https://example.com/repo.git")
         assert platform == "unknown"

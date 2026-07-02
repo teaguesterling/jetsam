@@ -573,7 +573,8 @@ def plan_finish(
     if state.dirty:
         warnings.append("Working tree has uncommitted changes")
 
-    # Merge the PR if one exists
+    # Merge the PR if one exists. state.pr is only populated when the caller
+    # ran attach_open_pr() — build_state() alone always leaves it None.
     if state.pr:
         steps.append(PlanStep(
             action="pr_merge",
@@ -583,6 +584,11 @@ def plan_finish(
                 "delete_branch": not no_delete,
             },
         ))
+    else:
+        warnings.append(
+            f"No open PR for '{state.branch}' — nothing to merge, "
+            "planning local cleanup only"
+        )
 
     # Switch back to default branch
     if worktree_path:

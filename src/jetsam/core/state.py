@@ -199,6 +199,39 @@ def build_state(cwd: str | None = None) -> RepoState:
     return state
 
 
+def attach_open_pr(state: RepoState) -> RepoState:
+    """Populate state.pr with the branch's open PR, if any.
+
+    build_state() deliberately skips this — the lookup costs a platform CLI
+    round-trip most verbs don't need. Verbs whose plan shape depends on the
+    PR (finish) must call this explicitly, otherwise state.pr is always None
+    and the pr_merge step is silently never planned.
+
+    Only an *open* PR is attached: pr_for_branch returns the branch's most
+    recent PR even when merged/closed, and re-merging one of those is never
+    what finish should plan.
+    """
+    from jetsam.platforms import get_platform
+
+    if state.branch == state.default_branch:
+        return state
+    platform = get_platform(state.platform, cwd=state.repo_root or None)
+    if platform is None:
+        return state
+    pr = platform.pr_for_branch(state.branch)
+    if pr is not None and pr.state == "open":
+        state.pr = PRInfo(
+            number=pr.number,
+            state=pr.state,
+            title=pr.title,
+            url=pr.url,
+            checks=pr.checks,
+            reviews=pr.reviews,
+            mergeable=pr.mergeable,
+        )
+    return state
+
+
 def _detect_default_branch(cwd: str | None = None) -> str:
     """Detect the default branch (main or master)."""
     # Try remote HEAD first

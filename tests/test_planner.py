@@ -338,6 +338,26 @@ class TestPlanFinish:
         merge_step = next(s for s in plan.steps if s.action == "pr_merge")
         assert merge_step.params["delete_branch"] is False
 
+    def test_open_pr_plans_merge_step(self):
+        pr = PRInfo(number=42, state="open", title="feature")
+        state = _make_state(pr=pr)
+        plan = plan_finish(state, plan_id="p_test", config=_DEFAULT_CONFIG)
+        actions = [s.action for s in plan.steps]
+        assert "pr_merge" in actions
+        assert plan.steps[0].action == "pr_merge"
+        assert plan.steps[0].params["number"] == 42
+
+    def test_no_pr_skips_merge_and_warns(self):
+        state = _make_state(pr=None)
+        plan = plan_finish(state, plan_id="p_test", config=_DEFAULT_CONFIG)
+        actions = [s.action for s in plan.steps]
+        assert "pr_merge" not in actions
+        # Must not be silent: the plan looks like a normal finish otherwise
+        assert any("No open PR" in w for w in plan.warnings)
+        # Local cleanup still planned
+        assert "checkout" in actions
+        assert "branch_delete" in actions
+
 
 class TestPlanShip:
     def test_full_pipeline(self):

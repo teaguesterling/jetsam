@@ -7,7 +7,7 @@ from jetsam.core.executor import execute_plan
 from jetsam.core.output import format_json
 from jetsam.core.planner import Plan, plan_finish
 from jetsam.core.plans import generate_plan_id
-from jetsam.core.state import build_state
+from jetsam.core.state import attach_open_pr, build_state
 
 
 @click.command()
@@ -29,7 +29,7 @@ def finish(
     Merges the PR for the current branch, switches to the default branch,
     and deletes the feature branch.
     """
-    state = build_state()
+    state = attach_open_pr(build_state())
     config = load_config(state.repo_root)
     plan_id = generate_plan_id()
 

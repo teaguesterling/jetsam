@@ -21,6 +21,7 @@ class PRDetails:
     checks: str = ""  # "passing", "failing", "pending", ""
     reviews: str = ""  # "approved", "changes_requested", ""
     mergeable: bool = False
+    mergeable_state: str = "unknown"  # "mergeable", "conflicting", "unknown"
     labels: list[str] = field(default_factory=list)
 
 

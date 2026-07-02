@@ -43,7 +43,8 @@ class GitHubPlatform(Platform):
         """Get the PR for a branch."""
         ok, data = self._run_gh_json([
             "pr", "view", branch,
-            "--json", "number,state,title,body,url,baseRefName,headRefName,isDraft,labels",
+            "--json",
+            "number,state,title,body,url,baseRefName,headRefName,isDraft,labels,mergeable",
         ])
         if not ok:
             return None
@@ -75,7 +76,8 @@ class GitHubPlatform(Platform):
         # Fetch the PR details
         ok2, data = self._run_gh_json([
             "pr", "view", url,
-            "--json", "number,state,title,body,url,baseRefName,headRefName,isDraft,labels",
+            "--json",
+            "number,state,title,body,url,baseRefName,headRefName,isDraft,labels,mergeable",
         ])
         if ok2:
             return _parse_pr(data)
@@ -94,7 +96,7 @@ class GitHubPlatform(Platform):
         args = [
             "pr", "list",
             "--state", state,
-            "--json", "number,state,title,url,baseRefName,headRefName,isDraft,labels",
+            "--json", "number,state,title,url,baseRefName,headRefName,isDraft,labels,mergeable",
             "--limit", "50",
         ]
         if author:
@@ -305,6 +307,11 @@ def _parse_pr(data: dict[str, Any]) -> PRDetails:
     if isinstance(raw_labels, list):
         labels = [lb.get("name", "") if isinstance(lb, dict) else str(lb) for lb in raw_labels]
 
+    # gh reports mergeability as MERGEABLE / CONFLICTING / UNKNOWN, where
+    # UNKNOWN usually means GitHub is still computing it — keep the raw
+    # tri-state so callers can tell "conflicting" from "not computed yet".
+    raw_mergeable = str(data.get("mergeable") or "").lower()
+
     return PRDetails(
         number=data.get("number", 0),
         state=data.get("state", "open").lower(),
@@ -314,6 +321,8 @@ def _parse_pr(data: dict[str, Any]) -> PRDetails:
         base=data.get("baseRefName", ""),
         head=data.get("headRefName", ""),
         draft=data.get("isDraft", False),
+        mergeable=raw_mergeable == "mergeable",
+        mergeable_state=raw_mergeable or "unknown",
         labels=labels,
     )
 

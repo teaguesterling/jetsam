@@ -24,7 +24,7 @@ from jetsam.core.planner import (
     plan_tidy,
 )
 from jetsam.core.plans import PlanStore, generate_plan_id, update_plan
-from jetsam.core.state import build_state
+from jetsam.core.state import attach_open_pr, build_state
 from jetsam.git.parsers import parse_diff_numstat, parse_log
 from jetsam.git.wrapper import run_git_sync
 
@@ -389,7 +389,7 @@ def register_tools(mcp: FastMCP) -> None:
                 the MCP server's cwd. Use to operate on a non-cwd repo without
                 falling back to the `git` passthrough.
         """
-        state = build_state(cwd=cwd)
+        state = attach_open_pr(build_state(cwd=cwd))
         config = load_config(state.repo_root)
         pid = generate_plan_id()
 

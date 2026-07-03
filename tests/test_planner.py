@@ -338,6 +338,26 @@ class TestPlanFinish:
         merge_step = next(s for s in plan.steps if s.action == "pr_merge")
         assert merge_step.params["delete_branch"] is False
 
+    def test_open_pr_plans_merge_step(self):
+        pr = PRInfo(number=42, state="open", title="feature")
+        state = _make_state(pr=pr)
+        plan = plan_finish(state, plan_id="p_test", config=_DEFAULT_CONFIG)
+        actions = [s.action for s in plan.steps]
+        assert "pr_merge" in actions
+        assert plan.steps[0].action == "pr_merge"
+        assert plan.steps[0].params["number"] == 42
+
+    def test_no_pr_skips_merge_and_warns(self):
+        state = _make_state(pr=None)
+        plan = plan_finish(state, plan_id="p_test", config=_DEFAULT_CONFIG)
+        actions = [s.action for s in plan.steps]
+        assert "pr_merge" not in actions
+        # Must not be silent: the plan looks like a normal finish otherwise
+        assert any("No open PR" in w for w in plan.warnings)
+        # Local cleanup still planned
+        assert "checkout" in actions
+        assert "branch_delete" in actions
+
 
 class TestPlanShip:
     def test_full_pipeline(self):
@@ -626,6 +646,19 @@ class TestFilesSentinelAndNoise:
         state = _make_state(staged=[], unstaged=["modified.py"], ahead=1)
         plan = plan_ship(state, plan_id="p_test", message="x", files=[], config=_DEFAULT_CONFIG)
         assert [s.action for s in plan.steps] == ["push", "pr_create"]
+
+    def test_ship_files_empty_no_upstream_still_pushes(self):
+        # A fresh branch has no upstream, so ahead reports 0 even with local
+        # commits — ship must still push (with set_upstream), or pr_create
+        # runs against a branch the remote has never seen.
+        state = _make_state(
+            staged=[], unstaged=[], untracked=[], dirty=False, ahead=0, upstream=None,
+        )
+        plan = plan_ship(state, plan_id="p_test", message="x", files=[], config=_DEFAULT_CONFIG)
+        actions = [s.action for s in plan.steps]
+        assert actions == ["push", "pr_create"]
+        push_step = plan.steps[0]
+        assert push_step.params["set_upstream"] is True
 
     def test_ship_files_none_auto_stages(self):
         state = _make_state(staged=[], unstaged=["modified.py"], ahead=0)

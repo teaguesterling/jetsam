@@ -335,8 +335,11 @@ def plan_ship(
     elif not message:
         message = ""
 
-    # Push — if there are commits to push or we just committed
-    if has_something_to_commit or state.ahead > 0:
+    # Push — if there are commits to push or we just committed. A branch
+    # with no upstream reports ahead=0 (nothing to count against), so it
+    # must push regardless — otherwise ship(files=[]) on a fresh branch
+    # plans pr_create against a branch the remote has never seen.
+    if has_something_to_commit or state.ahead > 0 or state.upstream is None:
         steps.append(
             PlanStep(
                 action="push",
@@ -573,7 +576,8 @@ def plan_finish(
     if state.dirty:
         warnings.append("Working tree has uncommitted changes")
 
-    # Merge the PR if one exists
+    # Merge the PR if one exists. state.pr is only populated when the caller
+    # ran attach_open_pr() — build_state() alone always leaves it None.
     if state.pr:
         steps.append(PlanStep(
             action="pr_merge",
@@ -583,6 +587,11 @@ def plan_finish(
                 "delete_branch": not no_delete,
             },
         ))
+    else:
+        warnings.append(
+            f"No open PR for '{state.branch}' — nothing to merge, "
+            "planning local cleanup only"
+        )
 
     # Switch back to default branch
     if worktree_path:

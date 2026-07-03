@@ -2,7 +2,8 @@
 
 from pathlib import Path
 
-from jetsam.core.state import RepoState, _is_jetsam_path, build_state
+from jetsam.core.state import RepoState, _is_jetsam_path, attach_open_pr, build_state
+from jetsam.platforms.base import PRDetails
 
 
 class TestBuildState:
@@ -170,3 +171,73 @@ class TestBuildState:
         hash1 = state1.compute_hash()
         hash2 = state2.compute_hash()
         assert hash1 != hash2
+
+
+class _FakePlatform:
+    def __init__(self, pr: PRDetails | None):
+        self._pr = pr
+        self.lookups = 0
+
+    def pr_for_branch(self, branch: str) -> PRDetails | None:
+        self.lookups += 1
+        return self._pr
+
+
+def _feature_state(**kwargs) -> RepoState:
+    defaults = dict(
+        branch="feature", upstream="origin/feature", default_branch="main",
+        dirty=False, staged=[], unstaged=[], untracked=[],
+        ahead=0, behind=0, stash_count=0,
+        platform="github", remote="user/repo",
+        remote_url="git@github.com:user/repo.git",
+        head_sha="abc123", repo_root="/tmp/repo",
+    )
+    defaults.update(kwargs)
+    return RepoState(**defaults)
+
+
+class TestAttachOpenPr:
+    """attach_open_pr is what makes finish able to plan pr_merge —
+    build_state() alone always leaves state.pr None."""
+
+    def _patch_platform(self, monkeypatch, platform):
+        monkeypatch.setattr(
+            "jetsam.platforms.get_platform", lambda name, cwd=None: platform
+        )
+
+    def test_open_pr_attached(self, monkeypatch):
+        pr = PRDetails(number=7, state="open", title="Add thing", url="u", mergeable=True)
+        self._patch_platform(monkeypatch, _FakePlatform(pr))
+
+        state = attach_open_pr(_feature_state())
+        assert state.pr is not None
+        assert state.pr.number == 7
+        assert state.pr.state == "open"
+        assert state.pr.mergeable is True
+
+    def test_merged_pr_not_attached(self, monkeypatch):
+        """pr_for_branch returns the most recent PR even when merged —
+        finish must never plan a re-merge of it."""
+        pr = PRDetails(number=7, state="merged", title="Old", url="u")
+        self._patch_platform(monkeypatch, _FakePlatform(pr))
+
+        state = attach_open_pr(_feature_state())
+        assert state.pr is None
+
+    def test_no_pr_leaves_none(self, monkeypatch):
+        self._patch_platform(monkeypatch, _FakePlatform(None))
+        state = attach_open_pr(_feature_state())
+        assert state.pr is None
+
+    def test_default_branch_skips_lookup(self, monkeypatch):
+        platform = _FakePlatform(PRDetails(number=1, state="open", title="x"))
+        self._patch_platform(monkeypatch, platform)
+
+        state = attach_open_pr(_feature_state(branch="main"))
+        assert state.pr is None
+        assert platform.lookups == 0
+
+    def test_unknown_platform_is_noop(self, monkeypatch):
+        self._patch_platform(monkeypatch, None)
+        state = attach_open_pr(_feature_state(platform="unknown"))
+        assert state.pr is None

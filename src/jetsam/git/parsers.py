@@ -277,11 +277,22 @@ def parse_remote_url(url: str) -> tuple[str, str]:
     """
     url = url.strip()
 
-    # SSH: git@github.com:owner/repo.git
+    # SSH (scp-style): git@github.com:owner/repo.git
     ssh_match = re.match(r"git@([^:]+):(.+?)(?:\.git)?$", url)
     if ssh_match:
         host = ssh_match.group(1)
         path = ssh_match.group(2)
+        platform = _host_to_platform(host)
+        return platform, path
+
+    # SSH (explicit scheme): ssh://git@github.com/owner/repo.git
+    # (optional user@ and :port — `git clone` accepts both spellings)
+    ssh_scheme_match = re.match(
+        r"(?:ssh|git)://(?:[^@/]+@)?([^/:]+)(?::\d+)?/(.+?)(?:\.git)?/?$", url
+    )
+    if ssh_scheme_match:
+        host = ssh_scheme_match.group(1)
+        path = ssh_scheme_match.group(2)
         platform = _host_to_platform(host)
         return platform, path
 

@@ -40,6 +40,27 @@ class TestParsepr:
         pr = _parse_pr(data)
         assert pr.labels == []
 
+    def test_mergeable_true(self):
+        pr = _parse_pr({"number": 1, "state": "open", "mergeable": "MERGEABLE"})
+        assert pr.mergeable is True
+        assert pr.mergeable_state == "mergeable"
+
+    def test_mergeable_conflicting(self):
+        pr = _parse_pr({"number": 1, "state": "open", "mergeable": "CONFLICTING"})
+        assert pr.mergeable is False
+        assert pr.mergeable_state == "conflicting"
+
+    def test_mergeable_unknown(self):
+        # gh reports UNKNOWN while GitHub is still computing mergeability
+        pr = _parse_pr({"number": 1, "state": "open", "mergeable": "UNKNOWN"})
+        assert pr.mergeable is False
+        assert pr.mergeable_state == "unknown"
+
+    def test_mergeable_missing(self):
+        pr = _parse_pr({"number": 1, "state": "open"})
+        assert pr.mergeable is False
+        assert pr.mergeable_state == "unknown"
+
 
 class TestNormalizeCheckStatus:
     def test_pass(self):

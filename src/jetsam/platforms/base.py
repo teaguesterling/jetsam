@@ -5,6 +5,14 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
+# Canonical allowlists for values interpolated into a ``gh``/``glab`` argv as
+# ``--<value>`` flags. Single source of truth so the CLI (``click.Choice``) and
+# the MCP path validate against the same set and cannot drift
+# (GHSA-w893-5jfc-rwq9). An out-of-set value (e.g. "admin") must be rejected,
+# never coerced, so an injection attempt surfaces rather than silently degrades.
+MERGE_STRATEGIES: tuple[str, ...] = ("squash", "merge", "rebase")
+REVIEW_EVENTS: tuple[str, ...] = ("approve", "request-changes", "comment")
+
 
 @dataclass
 class PRDetails:

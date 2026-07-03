@@ -6,7 +6,15 @@ import json
 import subprocess
 from typing import Any
 
-from jetsam.platforms.base import CheckResult, IssueDetails, Platform, PlatformError, PRDetails
+from jetsam.platforms.base import (
+    MERGE_STRATEGIES,
+    REVIEW_EVENTS,
+    CheckResult,
+    IssueDetails,
+    Platform,
+    PlatformError,
+    PRDetails,
+)
 
 
 class GitHubPlatform(Platform):
@@ -136,6 +144,10 @@ class GitHubPlatform(Platform):
         delete_branch: bool = True,
     ) -> bool:
         """Merge a PR."""
+        if strategy not in MERGE_STRATEGIES:
+            raise ValueError(
+                f"invalid merge strategy {strategy!r}; expected one of {MERGE_STRATEGIES}"
+            )
         args = ["pr", "merge", str(pr_number), f"--{strategy}"]
         if delete_branch:
             args.append("--delete-branch")
@@ -210,6 +222,10 @@ class GitHubPlatform(Platform):
 
     def pr_review(self, pr_number: int, body: str, event: str) -> dict[str, str]:
         """Submit a PR review."""
+        if event not in REVIEW_EVENTS:
+            raise ValueError(
+                f"invalid review event {event!r}; expected one of {REVIEW_EVENTS}"
+            )
         args = ["pr", "review", str(pr_number), f"--{event}"]
         if body:
             args.extend(["--body", body])

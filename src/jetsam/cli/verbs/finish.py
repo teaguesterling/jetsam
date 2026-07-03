@@ -8,10 +8,11 @@ from jetsam.core.output import format_json
 from jetsam.core.planner import Plan, plan_finish
 from jetsam.core.plans import generate_plan_id
 from jetsam.core.state import attach_open_pr, build_state
+from jetsam.platforms.base import MERGE_STRATEGIES
 
 
 @click.command()
-@click.option("--strategy", type=click.Choice(["squash", "merge", "rebase"]),
+@click.option("--strategy", type=click.Choice(list(MERGE_STRATEGIES)),
               default=None, help="Merge strategy (default: squash)")
 @click.option("--no-delete", is_flag=True, help="Keep the branch after merging")
 @click.option("--dry-run", is_flag=True, help="Show plan without executing")

@@ -164,19 +164,24 @@ def update_plan(
                 step.params["title"] = message
 
     if exclude is not None:
-        # Remove files matching the exclude pattern from stage steps
+        # Remove files matching the exclude pattern from both the stage step and
+        # the commit step's pathspec. Filtering the commit list too is essential:
+        # the executor commits that explicit pathspec, so leaving an excluded
+        # file in it would silently re-include it (issue #19).
+        removed_all: list[str] = []
         for step in plan.steps:
-            if step.action == "stage":
+            if step.action in ("stage", "commit"):
                 old_files = step.params.get("files", [])
                 new_files = [f for f in old_files if not fnmatch.fnmatch(f, exclude)]
                 removed = [f for f in old_files if f not in new_files]
                 if removed:
                     step.params["files"] = new_files
-                    diff["removed_files"] = removed
-                    # Update file count in commit step
-                    for cs in plan.steps:
-                        if cs.action == "commit":
-                            cs.params["file_count"] = len(new_files)
+                    removed_all.extend(removed)
+                    if step.action == "commit":
+                        step.params["file_count"] = len(new_files)
+        if removed_all:
+            # De-duplicate while preserving order (a file can appear in both steps).
+            diff["removed_files"] = list(dict.fromkeys(removed_all))
 
     if include is not None or files is not None:
         # Add files — this requires the full file list from state

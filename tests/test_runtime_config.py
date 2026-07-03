@@ -30,7 +30,6 @@ class TestFromEnv:
         assert cfg.log_level == "info"
         assert cfg.default_sync_strategy == "rebase"
         assert cfg.signing_required is False
-        assert cfg.auto_confirm_safe_verbs == []
 
     def test_active_root_from_env(self):
         cfg = JetsamRuntimeConfig.from_env(env={"JETSAM_ACTIVE_ROOT": "/tmp/repo"})
@@ -53,12 +52,6 @@ class TestFromEnv:
         for v in ("false", "0", "no", "off", ""):
             cfg = JetsamRuntimeConfig.from_env(env={"JETSAM_SIGNING_REQUIRED": v})
             assert cfg.signing_required is False, f"failed for {v!r}"
-
-    def test_safe_verbs_csv(self):
-        cfg = JetsamRuntimeConfig.from_env(
-            env={"JETSAM_AUTO_CONFIRM_SAFE_VERBS": "save, switch ,start"}
-        )
-        assert cfg.auto_confirm_safe_verbs == ["save", "switch", "start"]
 
 
 class TestUpdateRuntime:
@@ -89,9 +82,11 @@ class TestUpdateRuntime:
         with pytest.raises(ValueError, match="signing_required"):
             update_runtime({"signing_required": "true"})  # string, not bool
 
-    def test_safe_verbs_must_be_list_of_str(self):
-        with pytest.raises(ValueError, match="auto_confirm_safe_verbs"):
-            update_runtime({"auto_confirm_safe_verbs": "save,switch"})
+    def test_removed_auto_confirm_key_is_rejected_as_unknown(self):
+        # The dead auto_confirm_safe_verbs knob was removed; setting it now
+        # fails as an unknown key rather than being silently accepted.
+        with pytest.raises(ValueError, match="unknown config key"):
+            update_runtime({"auto_confirm_safe_verbs": ["save"]})
 
 
 class TestResetRuntime:

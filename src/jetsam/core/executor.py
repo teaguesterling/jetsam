@@ -182,7 +182,16 @@ def _exec_stage(step: PlanStep, cwd: str | None) -> StepResult:
 
 def _exec_commit(step: PlanStep, cwd: str | None) -> StepResult:
     message = step.params.get("message", "update")
-    result = run_git_sync(["commit", "-m", message], cwd=cwd)
+    # Commit an explicit pathspec (the plan's file list) rather than the whole
+    # index, so an unrelated already-staged file — or one removed via
+    # modify_plan(exclude=...) — is not swept into the commit (issue #19).
+    # Fall back to a bare commit only when a plan carries no file list (older
+    # plans / steps that don't set one).
+    files = step.params.get("files")
+    if files:
+        result = run_git_sync(["commit", "-m", message, "--", *files], cwd=cwd)
+    else:
+        result = run_git_sync(["commit", "-m", message], cwd=cwd)
     if result.ok:
         # Extract SHA from output
         sha_result = run_git_sync(["rev-parse", "--short", "HEAD"], cwd=cwd)

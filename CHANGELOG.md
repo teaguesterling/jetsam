@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.6
+
+### Bug fixes
+- **`jetsam --version` reports the real version.** `__version__` was a hardcoded string (`1.1.2`, stale since v1.1.3) that misreported the release. It's now derived from the installed package metadata (`importlib.metadata`), single-sourced from `pyproject.toml`, so it can't drift from the release again.
+
 ## v1.1.5
 
 ### Bug fixes

@@ -1,12 +1,13 @@
 # Changelog
 
-## Unreleased
+## v1.1.5
 
 ### Bug fixes
 - **`finish` actually merges the PR now.** `build_state()` never populates `state.pr` (the lookup costs a platform round-trip), so `plan_finish`'s `if state.pr:` never fired — from both the MCP tool and the CLI verb, `finish` silently planned only `checkout + fetch + branch_delete` and left the PR open, while reading as if it had shipped. Both entry points now call the new `attach_open_pr()` (open PRs only — `pr_for_branch` also returns merged/closed ones, which must never be re-merged), and `plan_finish` warns explicitly when there is no open PR instead of silently degrading to local cleanup.
 - **`ssh://` remotes are recognized.** `parse_remote_url` only matched scp-style (`git@host:path`) and `https://` URLs, so a repo cloned with the explicit `ssh://git@github.com/owner/repo.git` spelling got platform "unknown" and every platform op failed with "No platform configured" — jetsam's own origin uses this form. Now matched (including optional user@ and :port).
 - **`ship` pushes fresh branches.** The push step was gated on `has_something_to_commit or ahead > 0`, but a branch with no upstream always reports `ahead=0` — so `ship(files=[])` on a just-created branch planned `pr_create` against a branch the remote had never seen. No upstream now implies a push (with `set_upstream`).
 - **`mergeable` is real data now.** The GitHub adapter never requested the `mergeable` field from `gh`, so `pr_view`/`pr_list`/`pr_for_branch` reported `mergeable: false` for every PR regardless of actual state. The field is now requested and mapped; a new `mergeable_state` ("mergeable" / "conflicting" / "unknown") preserves gh's tri-state so callers can tell a real conflict from GitHub still computing.
+- **`plan_not_found` on immediate confirm — plan store is no longer repo/cwd-pinned.** The MCP plan store was a process-global singleton pinned to whichever repo the server first touched (and `PlanStore("")` rooted at the process cwd), so a plan saved for one repo could be invisible to `confirm` seconds later. Plans now live in a stable per-user dir (`~/.local/state/jetsam/plans/`, XDG-aware) keyed by `plan_id`; `confirm` still executes in the plan's own repo. Also validates plan ids (`^p_[0-9a-f]+$`) and reports the searched dir on `plan_not_found`. Closes #17 (and the #19 id-validation item).
 
 ## v1.1.4
 

@@ -124,8 +124,9 @@ class TestMultiRepoConfirm:
         plan_id = generate_plan_id()
         plan = plan_save(state, plan_id=plan_id, message="x")
 
-        # Persist via PlanStore (round-trips repo_root) and reload.
-        store = PlanStore(str(repo_b))  # store lives wherever the server is
+        # Persist via PlanStore (round-trips repo_root) and reload. The store
+        # lives in a fixed per-user dir, independent of any repo/cwd (#17).
+        store = PlanStore()
         store.save(plan)
         loaded = store.load(plan_id)
         assert loaded is not None
@@ -166,9 +167,9 @@ class TestMultiRepoConfirm:
         plan_id = generate_plan_id()
         plan = plan_save(state, plan_id=plan_id, message="x")
 
-        # Server's store lives in repo B (the "active_root" the old confirm
-        # would have fallen back to). Pin the module global so confirm uses it.
-        store_b = PlanStore(str(repo_b))
+        # The store is per-user (not per-repo); confirm still executes in the
+        # plan's own repo (A). Pin the module global so confirm uses this store.
+        store_b = PlanStore()
         store_b.save(plan)
         monkeypatch.setattr(tools, "_plan_store", store_b)
 

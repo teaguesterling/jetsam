@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 import secrets
 import time
 from pathlib import Path
@@ -12,25 +14,52 @@ from jetsam.core.planner import Plan, PlanStep
 
 PLAN_TTL_SECONDS = 300  # 5 minutes
 
+# A plan id is exactly ``p_`` followed by lowercase hex (see generate_plan_id).
+# Validated before it is ever joined into a filesystem path so a crafted id
+# (e.g. "../etc/passwd") cannot escape the plans directory (issue #19).
+_PLAN_ID_RE = re.compile(r"p_[0-9a-f]+")
+
 
 def generate_plan_id() -> str:
     """Generate a short unique plan ID."""
     return f"p_{secrets.token_hex(4)}"
 
 
+def _is_valid_plan_id(plan_id: object) -> bool:
+    """True only for the ids generate_plan_id() produces (safe as a path part)."""
+    return isinstance(plan_id, str) and _PLAN_ID_RE.fullmatch(plan_id) is not None
+
+
+def default_plans_dir() -> Path:
+    """Resolve the per-user directory where plans are stored.
+
+    Decoupled from any repo/cwd so a plan saved while working in repo A is
+    still found when confirm() runs after the server's cwd has moved to repo B
+    (issue #17). Uses ``$XDG_STATE_HOME/jetsam/plans`` when set, otherwise
+    ``~/.local/state/jetsam/plans``.
+    """
+    xdg = os.environ.get("XDG_STATE_HOME")
+    base = Path(xdg) if xdg else Path.home() / ".local" / "state"
+    return base / "jetsam" / "plans"
+
+
 class PlanStore:
     """Stores plans on disk with TTL validation.
 
-    Plans are stored as JSON in .jetsam/plans/ with a 5-minute TTL.
-    For CLI interactive flow, plans live in-memory and never hit disk.
+    Plans are stored as JSON in a fixed per-user directory (see
+    default_plans_dir), keyed by their unique plan_id, with a 5-minute TTL.
+    The location intentionally does NOT depend on any repo/cwd. For the CLI
+    interactive flow, plans live in-memory and never hit disk.
     """
 
-    def __init__(self, repo_root: str) -> None:
-        self.plans_dir = Path(repo_root) / ".jetsam" / "plans"
+    def __init__(self) -> None:
+        self.plans_dir = default_plans_dir()
         self.plans_dir.mkdir(parents=True, exist_ok=True)
 
     def save(self, plan: Plan) -> None:
-        """Save a plan to disk."""
+        """Save a plan to disk. Raises ValueError on a malformed plan_id."""
+        if not _is_valid_plan_id(plan.plan_id):
+            raise ValueError(f"invalid plan_id: {plan.plan_id!r}")
         data = {
             "plan_id": plan.plan_id,
             "verb": plan.verb,
@@ -47,7 +76,9 @@ class PlanStore:
         path.write_text(json.dumps(data, indent=2))
 
     def load(self, plan_id: str) -> Plan | None:
-        """Load a plan from disk. Returns None if not found or expired."""
+        """Load a plan from disk. Returns None if not found, expired, or invalid."""
+        if not _is_valid_plan_id(plan_id):
+            return None
         path = self.plans_dir / f"{plan_id}.json"
         if not path.exists():
             return None
@@ -81,7 +112,9 @@ class PlanStore:
         )
 
     def delete(self, plan_id: str) -> None:
-        """Delete a plan from disk."""
+        """Delete a plan from disk. No-op for a malformed plan_id."""
+        if not _is_valid_plan_id(plan_id):
+            return
         path = self.plans_dir / f"{plan_id}.json"
         path.unlink(missing_ok=True)
 

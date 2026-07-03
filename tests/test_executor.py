@@ -117,33 +117,33 @@ class TestPlanStore:
     def test_save_and_load(self, tmp_git_repo: Path):
         from jetsam.core.plans import PlanStore
 
-        store = PlanStore(str(tmp_git_repo))
+        store = PlanStore()
         state = build_state(cwd=str(tmp_git_repo))
-        plan = plan_save(state, plan_id="p_test", message="test")
+        plan = plan_save(state, plan_id="p_deadbeef", message="test")
 
         store.save(plan)
-        loaded = store.load("p_test")
+        loaded = store.load("p_deadbeef")
         assert loaded is not None
-        assert loaded.plan_id == "p_test"
+        assert loaded.plan_id == "p_deadbeef"
         assert loaded.verb == "save"
         assert len(loaded.steps) == len(plan.steps)
 
     def test_load_nonexistent(self, tmp_git_repo: Path):
         from jetsam.core.plans import PlanStore
 
-        store = PlanStore(str(tmp_git_repo))
-        assert store.load("p_nonexistent") is None
+        store = PlanStore()
+        assert store.load("p_00000000") is None
 
     def test_delete(self, tmp_git_repo: Path):
         from jetsam.core.plans import PlanStore
 
-        store = PlanStore(str(tmp_git_repo))
+        store = PlanStore()
         state = build_state(cwd=str(tmp_git_repo))
-        plan = plan_save(state, plan_id="p_test", message="test")
+        plan = plan_save(state, plan_id="p_deadbeef", message="test")
 
         store.save(plan)
-        store.delete("p_test")
-        assert store.load("p_test") is None
+        store.delete("p_deadbeef")
+        assert store.load("p_deadbeef") is None
 
 
 class TestUpdatePlan:

@@ -9,6 +9,18 @@ from pathlib import Path
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def isolate_plan_store(tmp_path_factory: pytest.TempPathFactory,
+                       monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point the per-user plan store at a throwaway dir for every test.
+
+    PlanStore now resolves its location from XDG_STATE_HOME (issue #17), so
+    without this the suite would read/write the real ~/.local/state — or a
+    live jetsam server's plans dir. Isolate it per test.
+    """
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path_factory.mktemp("xdg_state")))
+
+
 @pytest.fixture
 def tmp_git_repo(tmp_path: Path) -> Path:
     """Create a temporary git repository with an initial commit."""

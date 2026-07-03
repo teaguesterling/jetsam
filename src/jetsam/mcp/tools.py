@@ -40,8 +40,9 @@ def _get_platform(state: Any) -> Platform | None:
 def _get_store() -> PlanStore:
     global _plan_store
     if _plan_store is None:
-        state = build_state()
-        _plan_store = PlanStore(state.repo_root)
+        # The store lives in a fixed per-user directory, independent of the
+        # server's cwd/repo (issue #17), so it no longer needs build_state().
+        _plan_store = PlanStore()
         _plan_store.cleanup_expired()
     return _plan_store
 
@@ -642,7 +643,10 @@ def register_tools(mcp: FastMCP) -> None:
         if plan is None:
             return JetsamError(
                 error="plan_not_found",
-                message=f"Plan {id} not found or expired.",
+                message=(
+                    f"Plan {id} not found or expired "
+                    f"(looked in {store.plans_dir})."
+                ),
                 suggested_action="Re-run the original command.",
                 recoverable=True,
             ).to_dict()

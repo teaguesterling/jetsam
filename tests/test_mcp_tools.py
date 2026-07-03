@@ -80,7 +80,7 @@ class TestSaveTool:
         plan = plan_save(state, plan_id=plan_id, message="mcp test save")
 
         # Store and retrieve
-        store = PlanStore(str(dirty_git_repo))
+        store = PlanStore()
         store.save(plan)
 
         loaded = store.load(plan_id)
@@ -188,7 +188,7 @@ class TestPlanWorkflow:
         from jetsam.core.plans import generate_plan_id
         from jetsam.core.state import build_state
 
-        store = PlanStore(str(tmp_git_repo))
+        store = PlanStore()
         state = build_state(cwd=str(tmp_git_repo))
         plan_id = generate_plan_id()
         plan = plan_save(state, plan_id=plan_id, message="test")

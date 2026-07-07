@@ -698,12 +698,10 @@ def register_tools(mcp: FastMCP) -> None:
             default_sync_strategy — rebase | merge
             default_base_branch — override for "main"
             signing_required    — fail fast if GPG not configured
-            auto_confirm_safe_verbs — verbs that bypass plan→confirm
 
         Env vars (seed at launch only): JETSAM_ACTIVE_ROOT,
         JETSAM_LOG_LEVEL, JETSAM_DEFAULT_SYNC_STRATEGY,
-        JETSAM_DEFAULT_BASE_BRANCH, JETSAM_SIGNING_REQUIRED,
-        JETSAM_AUTO_CONFIRM_SAFE_VERBS.
+        JETSAM_DEFAULT_BASE_BRANCH, JETSAM_SIGNING_REQUIRED.
 
         Args:
             set: Dict of keys to update. Unknown keys raise; invalid

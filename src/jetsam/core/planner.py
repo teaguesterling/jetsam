@@ -131,7 +131,13 @@ def plan_save(
     steps.append(
         PlanStep(
             action="commit",
-            params={"message": message, "file_count": len(all_staged)},
+            params={
+                "message": message,
+                "file_count": len(all_staged),
+                # Explicit pathspec so the commit is scoped to the plan's files
+                # (issue #19); see _exec_commit.
+                "files": all_staged,
+            },
         )
     )
 
@@ -329,7 +335,13 @@ def plan_ship(
         steps.append(
             PlanStep(
                 action="commit",
-                params={"message": message, "file_count": len(all_staged)},
+                params={
+                    "message": message,
+                    "file_count": len(all_staged),
+                    # Explicit pathspec so the commit is scoped to the plan's
+                    # files (issue #19); see _exec_commit.
+                    "files": all_staged,
+                },
             )
         )
     elif not message:

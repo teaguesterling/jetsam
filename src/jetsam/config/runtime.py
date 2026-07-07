@@ -13,7 +13,7 @@ hardcoded defaults.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field, fields, replace
+from dataclasses import dataclass, fields, replace
 from typing import Any
 
 _ENV_PREFIX = "JETSAM_"
@@ -39,10 +39,6 @@ class JetsamRuntimeConfig:
         signing_required: if True, save/ship/release fail fast when GPG isn't
             configured for the repo. Useful in fleet repos that require
             signed commits.
-        auto_confirm_safe_verbs: list of verb names that bypass the
-            plan→confirm flow. Default empty. Add "save" here to skip the
-            confirm step for low-risk commits. NOT recommended for sync /
-            ship / release / finish (those touch remote state).
     """
 
     active_root: str | None = None
@@ -50,7 +46,6 @@ class JetsamRuntimeConfig:
     default_sync_strategy: str = "rebase"
     default_base_branch: str | None = None
     signing_required: bool = False
-    auto_confirm_safe_verbs: list[str] = field(default_factory=list)
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> JetsamRuntimeConfig:
@@ -62,7 +57,6 @@ class JetsamRuntimeConfig:
             JETSAM_DEFAULT_SYNC_STRATEGY — rebase/merge
             JETSAM_DEFAULT_BASE_BRANCH — branch name
             JETSAM_SIGNING_REQUIRED    — true/false/1/0/yes/no
-            JETSAM_AUTO_CONFIRM_SAFE_VERBS — comma-separated, e.g. "save,switch"
 
         Invalid values fall back to the dataclass default.
         """
@@ -81,8 +75,6 @@ class JetsamRuntimeConfig:
             cfg.default_base_branch = v
         if v := e.get(f"{_ENV_PREFIX}SIGNING_REQUIRED"):
             cfg.signing_required = _parse_bool(v)
-        if v := e.get(f"{_ENV_PREFIX}AUTO_CONFIRM_SAFE_VERBS"):
-            cfg.auto_confirm_safe_verbs = [s.strip() for s in v.split(",") if s.strip()]
 
         return cfg
 
@@ -153,9 +145,6 @@ def _validate_one(key: str, value: Any) -> None:
     elif key == "signing_required":
         if not isinstance(value, bool):
             raise ValueError(f"signing_required must be bool, got {type(value).__name__}")
-    elif key == "auto_confirm_safe_verbs":
-        if not isinstance(value, list) or not all(isinstance(s, str) for s in value):
-            raise ValueError(f"auto_confirm_safe_verbs must be list[str], got {value!r}")
     elif key in ("active_root", "default_base_branch"):
         if value is None or isinstance(value, str):
             return

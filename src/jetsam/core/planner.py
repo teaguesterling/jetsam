@@ -558,6 +558,17 @@ def plan_finish(
     if no_delete is None:
         no_delete = not config.delete_on_merge
 
+    # Allowlist the merge strategy at plan-build time so an injected value
+    # (e.g. "admin" -> `gh pr merge --admin`) is rejected before it is stored in
+    # a plan, never coerced (GHSA-w893-5jfc-rwq9). The platform layer applies the
+    # same check as a backstop.
+    from jetsam.platforms.base import MERGE_STRATEGIES
+
+    if strategy not in MERGE_STRATEGIES:
+        raise ValueError(
+            f"invalid merge strategy {strategy!r}; expected one of {MERGE_STRATEGIES}"
+        )
+
     steps: list[PlanStep] = []
     warnings: list[str] = []
 

@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
+from jetsam.platforms.base import CheckResult, IssueDetails, PRDetails
 from jetsam.platforms.github import (
     GitHubPlatform,
     PlatformError,
@@ -60,6 +61,59 @@ class TestParsepr:
         pr = _parse_pr({"number": 1, "state": "open"})
         assert pr.mergeable is False
         assert pr.mergeable_state == "unknown"
+
+    def test_extra_api_fields_ignored(self):
+        # gh may return fields we don't request/declare; they must not crash
+        pr = _parse_pr({
+            "number": 1,
+            "state": "open",
+            "mergeable": "MERGEABLE",
+            "mergeStateStatus": "CLEAN",
+            "someFutureField": {"nested": True},
+        })
+        assert pr.number == 1
+        assert pr.mergeable is True
+
+
+class TestFieldTolerance:
+    """Unknown/new fields must never crash model construction.
+
+    Regression for: PRDetails.__init__() got an unexpected keyword argument
+    'mergeable_state' — raised when a newer adapter passed a field a loaded
+    older model didn't declare. from_fields() drops unknown kwargs.
+    """
+
+    def test_prdetails_tolerates_unknown_fields(self):
+        pr = PRDetails.from_fields(
+            number=7,
+            state="open",
+            title="t",
+            mergeable_state="mergeable",
+            made_up_future_field="surprise",
+        )
+        assert pr.number == 7
+        assert pr.mergeable_state == "mergeable"
+        assert not hasattr(pr, "made_up_future_field")
+
+    def test_prdetails_from_api_dict_with_extras(self):
+        data = {"number": 3, "state": "open", "title": "x",
+                "mergeable_state": "conflicting", "brand_new_field": 123}
+        pr = PRDetails.from_fields(**data)
+        assert pr.number == 3
+        assert pr.mergeable_state == "conflicting"
+
+    def test_issuedetails_tolerates_unknown_fields(self):
+        issue = IssueDetails.from_fields(
+            number=9, title="i", state="open", reaction_summary={"+1": 2},
+        )
+        assert issue.number == 9
+
+    def test_checkresult_tolerates_unknown_fields(self):
+        check = CheckResult.from_fields(
+            name="ci", status="pass", started_at="2026-01-01T00:00:00Z",
+        )
+        assert check.name == "ci"
+        assert check.status == "pass"
 
 
 class TestNormalizeCheckStatus:

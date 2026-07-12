@@ -3,11 +3,32 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
+from typing import Any
+
+
+class FieldTolerant:
+    """Mixin: construct a dataclass while silently dropping unknown kwargs.
+
+    Platform adapters build these models from external API responses (gh/glab
+    JSON), and those APIs grow fields over time. A long-running server can
+    also end up with an adapter module newer than the model module (or vice
+    versa) across an editable-install upgrade, in which case the adapter may
+    pass a field the loaded model doesn't declare — historically this crashed
+    with ``PRDetails.__init__() got an unexpected keyword argument``.
+
+    ``from_fields()`` filters kwargs to the fields the class actually
+    declares, so an unknown/new field is ignored instead of raising.
+    """
+
+    @classmethod
+    def from_fields(cls, **kwargs: Any):
+        declared = {f.name for f in fields(cls)}  # type: ignore[arg-type]
+        return cls(**{k: v for k, v in kwargs.items() if k in declared})
 
 
 @dataclass
-class PRDetails:
+class PRDetails(FieldTolerant):
     """Pull request / merge request details."""
 
     number: int
@@ -26,7 +47,7 @@ class PRDetails:
 
 
 @dataclass
-class CheckResult:
+class CheckResult(FieldTolerant):
     """CI check result."""
 
     name: str
@@ -35,7 +56,7 @@ class CheckResult:
 
 
 @dataclass
-class IssueDetails:
+class IssueDetails(FieldTolerant):
     """Issue details."""
 
     number: int

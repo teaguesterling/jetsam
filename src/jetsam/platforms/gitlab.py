@@ -125,7 +125,7 @@ class GitLabPlatform(Platform):
             return []
 
         status = _normalize_pipeline_status(pipeline.get("status", ""))
-        return [CheckResult(
+        return [CheckResult.from_fields(
             name="pipeline",
             status=status,
             url=pipeline.get("web_url", ""),
@@ -241,7 +241,9 @@ def _parse_mr(data: dict[str, Any]) -> PRDetails:
     if state == "opened":
         state = "open"
 
-    return PRDetails(
+    # from_fields drops fields the loaded PRDetails doesn't declare — see
+    # FieldTolerant in base.py.
+    return PRDetails.from_fields(
         number=number,
         state=state,
         title=data.get("title", ""),
@@ -271,7 +273,7 @@ def _parse_gl_issue(data: dict[str, Any]) -> IssueDetails:
     if state == "opened":
         state = "open"
 
-    return IssueDetails(
+    return IssueDetails.from_fields(
         number=data.get("iid", data.get("number", 0)),
         title=data.get("title", ""),
         state=state,

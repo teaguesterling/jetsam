@@ -130,7 +130,7 @@ class GitHubPlatform(Platform):
         results: list[CheckResult] = []
         if isinstance(data, list):
             for item in data:
-                results.append(CheckResult(
+                results.append(CheckResult.from_fields(
                     name=item.get("name", ""),
                     status=_normalize_check_status(item.get("state", "")),
                     url=item.get("detailsUrl", ""),
@@ -305,7 +305,7 @@ def _parse_issue(data: dict[str, Any]) -> IssueDetails:
             a.get("login", "") if isinstance(a, dict) else str(a) for a in raw_assignees
         ]
 
-    return IssueDetails(
+    return IssueDetails.from_fields(
         number=data.get("number", 0),
         title=data.get("title", ""),
         state=data.get("state", "open").lower(),
@@ -328,7 +328,10 @@ def _parse_pr(data: dict[str, Any]) -> PRDetails:
     # tri-state so callers can tell "conflicting" from "not computed yet".
     raw_mergeable = str(data.get("mergeable") or "").lower()
 
-    return PRDetails(
+    # from_fields drops any field the loaded PRDetails doesn't declare, so a
+    # newer parser never crashes an older (already-imported) model — see
+    # FieldTolerant in base.py.
+    return PRDetails.from_fields(
         number=data.get("number", 0),
         state=data.get("state", "open").lower(),
         title=data.get("title", ""),

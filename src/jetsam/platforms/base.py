@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, fields
-from typing import Any
+from typing import Any, TypeVar
+
+_T = TypeVar("_T", bound="FieldTolerant")
 
 
 class FieldTolerant:
@@ -22,7 +24,7 @@ class FieldTolerant:
     """
 
     @classmethod
-    def from_fields(cls, **kwargs: Any):
+    def from_fields(cls: type[_T], **kwargs: Any) -> _T:
         declared = {f.name for f in fields(cls)}  # type: ignore[arg-type]
         return cls(**{k: v for k, v in kwargs.items() if k in declared})
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.1.7
 
 ### Security
 - **Merge `strategy` / review `event` allowlisted on the MCP path.** Both were interpolated into a `gh` argv as `--<value>`; the CLI constrained them via `click.Choice` but the MCP path did not, so `strategy="admin"` produced `gh pr merge --admin` (branch-protection bypass). Both now validate against canonical sets (`platforms.base.MERGE_STRATEGIES` / `REVIEW_EVENTS`) that the CLI also references, at plan-build time and again at the platform boundary. (GHSA-w893-5jfc-rwq9, #19)

@@ -295,11 +295,15 @@ class TestIssueClose:
             assert result["state"] == "closed"
 
     def test_close_not_planned(self):
+        # The documented hyphenated spelling is normalized to the space form
+        # gh actually accepts ("not planned"); passing "not-planned" through
+        # verbatim made gh reject the call (issue #19 follow-up).
         platform = GitHubPlatform()
         with patch.object(platform, "_run_gh", return_value=(True, "", "")) as mock:
             platform.issue_close(42, reason="not-planned")
             close_call = mock.call_args_list[-1]
-            assert "not-planned" in close_call[0][0]
+            assert "not planned" in close_call[0][0]
+            assert "not-planned" not in close_call[0][0]
 
     def test_close_failure(self):
         platform = GitHubPlatform()

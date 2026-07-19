@@ -7,7 +7,10 @@ import subprocess
 from typing import Any
 
 from jetsam.platforms.base import (
+    ISSUE_CLOSE_REASONS,
+    ISSUE_STATES,
     MERGE_STRATEGIES,
+    PR_STATES,
     REVIEW_EVENTS,
     CheckResult,
     IssueDetails,
@@ -101,6 +104,10 @@ class GitHubPlatform(Platform):
         author: str | None = None,
     ) -> list[PRDetails]:
         """List PRs."""
+        if state not in PR_STATES:
+            raise ValueError(
+                f"invalid PR state filter {state!r}; expected one of {PR_STATES}"
+            )
         args = [
             "pr", "list",
             "--state", state,
@@ -184,6 +191,10 @@ class GitHubPlatform(Platform):
         labels: list[str] | None = None,
     ) -> list[IssueDetails]:
         """List issues."""
+        if state not in ISSUE_STATES:
+            raise ValueError(
+                f"invalid issue state filter {state!r}; expected one of {ISSUE_STATES}"
+            )
         args = [
             "issue", "list",
             "--state", state,
@@ -273,6 +284,13 @@ class GitHubPlatform(Platform):
         self, number: int, comment: str | None = None, reason: str = "completed"
     ) -> dict[str, str]:
         """Close an issue, optionally with a comment."""
+        if reason not in ISSUE_CLOSE_REASONS:
+            raise ValueError(
+                f"invalid close reason {reason!r}; expected one of {ISSUE_CLOSE_REASONS}"
+            )
+        # gh only accepts the space form ("not planned"); normalize the
+        # documented hyphenated alias.
+        reason = "not planned" if reason == "not-planned" else reason
         if comment:
             ok, _, stderr = self._run_gh(["issue", "comment", str(number), "--body", comment])
             if not ok:

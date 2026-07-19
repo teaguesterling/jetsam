@@ -5,7 +5,7 @@ import click
 from jetsam.core.output import format_json
 from jetsam.core.state import build_state
 from jetsam.platforms import get_platform
-from jetsam.platforms.base import Platform
+from jetsam.platforms.base import PR_STATES, Platform
 
 
 @click.group(invoke_without_command=True)
@@ -89,7 +89,7 @@ def pr_create(
 
 @pr.command("list")
 @click.option("--state", "pr_state", default="open",
-              type=click.Choice(["open", "closed", "merged", "all"]),
+              type=click.Choice(list(PR_STATES)),
               help="Filter by state")
 @click.option("--author", default=None, help="Filter by author")
 @click.pass_context

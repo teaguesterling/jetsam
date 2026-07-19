@@ -19,7 +19,12 @@ from typing import Any
 _ENV_PREFIX = "JETSAM_"
 
 _VALID_LOG_LEVELS = {"debug", "info", "warn", "warning", "error"}
-_VALID_SYNC_STRATEGIES = {"rebase", "merge"}
+
+# Canonical sync strategies — single source of truth shared by the CLI
+# (click.Choice), the planner (plan_sync validation), and this runtime
+# config, so the paths cannot drift (issue #19 follow-up audit).
+SYNC_STRATEGIES: tuple[str, ...] = ("rebase", "merge")
+_VALID_SYNC_STRATEGIES = set(SYNC_STRATEGIES)
 
 
 @dataclass

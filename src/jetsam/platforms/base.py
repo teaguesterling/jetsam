@@ -36,6 +36,17 @@ class FieldTolerant:
 MERGE_STRATEGIES: tuple[str, ...] = ("squash", "merge", "rebase")
 REVIEW_EVENTS: tuple[str, ...] = ("approve", "request-changes", "comment")
 
+# Same principle for values passed in *value* position of a fixed flag
+# (``--state <value>``, ``--reason <value>``): these have fixed value sets, so
+# an out-of-set value is rejected at the MCP boundary and again at the platform
+# layer rather than forwarded to gh/glab (issue #19 follow-up audit).
+PR_STATES: tuple[str, ...] = ("open", "closed", "merged", "all")
+ISSUE_STATES: tuple[str, ...] = ("open", "closed", "all")
+# gh spells the second reason "not planned"; the hyphenated alias matches
+# jetsam's documented parameter form and is normalized to the space form
+# before the gh call.
+ISSUE_CLOSE_REASONS: tuple[str, ...] = ("completed", "not-planned", "not planned")
+
 
 @dataclass
 class PRDetails(FieldTolerant):

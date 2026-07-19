@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 from mcp.server.fastmcp import FastMCP
 
 from jetsam.config.manager import load_config
+from jetsam.config.runtime import SYNC_STRATEGIES
 from jetsam.core.executor import execute_plan
 from jetsam.core.output import JetsamError
 from jetsam.core.planner import (
@@ -27,6 +28,12 @@ from jetsam.core.plans import PlanStore, generate_plan_id, update_plan
 from jetsam.core.state import attach_open_pr, build_state
 from jetsam.git.parsers import parse_diff_numstat, parse_log
 from jetsam.git.wrapper import run_git_sync
+from jetsam.platforms.base import (
+    ISSUE_CLOSE_REASONS,
+    ISSUE_STATES,
+    PR_STATES,
+    REVIEW_EVENTS,
+)
 
 _plan_store: PlanStore | None = None
 
@@ -62,6 +69,23 @@ def _no_pr_error(branch: str) -> dict[str, Any]:
     return JetsamError(
         error="no_pr",
         message=f"No PR found for branch '{branch}'.",
+        recoverable=True,
+    ).to_dict()
+
+
+def _invalid_argument_error(
+    param: str, value: Any, allowed: tuple[str, ...]
+) -> dict[str, Any]:
+    """Standard error for an argument outside its fixed value set.
+
+    Fixed-set values (merge strategy, review event, state filters, close
+    reason) end up in a gh/glab/git argv; an out-of-set value is rejected
+    here — before anything reaches subprocess argv — never coerced
+    (GHSA-w893-5jfc-rwq9, issue #19 follow-up audit).
+    """
+    return JetsamError(
+        error="invalid_argument",
+        message=f"Invalid {param} {value!r}; expected one of {list(allowed)}.",
         recoverable=True,
     ).to_dict()
 
@@ -122,6 +146,8 @@ def register_tools(mcp: FastMCP) -> None:
                 the MCP server's cwd. Use to operate on a non-cwd repo without
                 falling back to the `git` passthrough.
         """
+        if strategy is not None and strategy not in SYNC_STRATEGIES:
+            return _invalid_argument_error("sync strategy", strategy, SYNC_STRATEGIES)
         state = build_state(cwd=cwd)
         pid = generate_plan_id()
         plan = plan_sync(state, plan_id=pid, strategy=strategy)
@@ -300,6 +326,8 @@ def register_tools(mcp: FastMCP) -> None:
                 the MCP server's cwd. Use to operate on a non-cwd repo without
                 falling back to the `git` passthrough.
         """
+        if state not in PR_STATES:
+            return _invalid_argument_error("PR state filter", state, PR_STATES)
         repo_state = build_state(cwd=cwd)
         platform = _get_platform(repo_state)
         if platform is None:
@@ -398,12 +426,21 @@ def register_tools(mcp: FastMCP) -> None:
         if state.worktree and state.worktree.active:
             worktree_path = state.worktree.current
 
-        plan = plan_finish(
-            state, plan_id=pid,
-            strategy=strategy, no_delete=no_delete,
-            worktree_path=worktree_path,
-            config=config,
-        )
+        try:
+            plan = plan_finish(
+                state, plan_id=pid,
+                strategy=strategy, no_delete=no_delete,
+                worktree_path=worktree_path,
+                config=config,
+            )
+        except ValueError as e:
+            # plan_finish allowlists the merge strategy (explicit param or a
+            # bad config value); surface it as the standard error dict.
+            return JetsamError(
+                error="invalid_argument",
+                message=str(e),
+                recoverable=True,
+            ).to_dict()
         _get_store().save(plan)
         return plan.to_dict()
 
@@ -431,6 +468,8 @@ def register_tools(mcp: FastMCP) -> None:
                 the MCP server's cwd. Use to operate on a non-cwd repo without
                 falling back to the `git` passthrough.
         """
+        if state not in ISSUE_STATES:
+            return _invalid_argument_error("issue state filter", state, ISSUE_STATES)
         repo_state = build_state(cwd=cwd)
         platform = _get_platform(repo_state)
         if platform is None:
@@ -489,6 +528,8 @@ def register_tools(mcp: FastMCP) -> None:
                 the MCP server's cwd. Use to operate on a non-cwd repo without
                 falling back to the `git` passthrough.
         """
+        if event not in REVIEW_EVENTS:
+            return _invalid_argument_error("review event", event, REVIEW_EVENTS)
         repo_state = build_state(cwd=cwd)
         platform = _get_platform(repo_state)
         if platform is None:
@@ -546,11 +587,14 @@ def register_tools(mcp: FastMCP) -> None:
         Args:
             number: Issue number.
             comment: Optional comment to post before closing.
-            reason: Close reason: "completed" (default) or "not-planned".
+            reason: Close reason: "completed" (default) or "not-planned"
+                (also accepted as "not planned").
             cwd: Working-directory override for this call. Defaults to
                 the MCP server's cwd. Use to operate on a non-cwd repo without
                 falling back to the `git` passthrough.
         """
+        if reason not in ISSUE_CLOSE_REASONS:
+            return _invalid_argument_error("close reason", reason, ISSUE_CLOSE_REASONS)
         repo_state = build_state(cwd=cwd)
         platform = _get_platform(repo_state)
         if platform is None:

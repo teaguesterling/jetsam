@@ -2,6 +2,7 @@
 
 import click
 
+from jetsam.config.runtime import SYNC_STRATEGIES
 from jetsam.core.executor import execute_plan
 from jetsam.core.output import format_json
 from jetsam.core.planner import Plan, plan_sync
@@ -10,7 +11,7 @@ from jetsam.core.state import build_state
 
 
 @click.command()
-@click.option("--strategy", type=click.Choice(["rebase", "merge"]), default=None,
+@click.option("--strategy", type=click.Choice(list(SYNC_STRATEGIES)), default=None,
               help="Sync strategy (default: rebase for feature, merge for default)")
 @click.option("--dry-run", is_flag=True, help="Show plan without executing")
 @click.option("--execute", "auto_execute", is_flag=True, help="Execute without prompting")

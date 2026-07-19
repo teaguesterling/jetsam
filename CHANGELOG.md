@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Security
+- **Merge `strategy` / review `event` allowlisted on the MCP path.** Both were interpolated into a `gh` argv as `--<value>`; the CLI constrained them via `click.Choice` but the MCP path did not, so `strategy="admin"` produced `gh pr merge --admin` (branch-protection bypass). Both now validate against canonical sets (`platforms.base.MERGE_STRATEGIES` / `REVIEW_EVENTS`) that the CLI also references, at plan-build time and again at the platform boundary. (GHSA-w893-5jfc-rwq9, #19)
+- **Follow-up allowlist audit: every fixed-value-set MCP param is validated before subprocess argv.** `pr_list`/`issues` `state` filters, `issue_close` `reason`, and the sync `strategy` (previously an out-of-set sync strategy silently coerced to "merge") are now rejected with the standard `{error, message, recoverable}` dict on the MCP path and `ValueError` at the platform layer (GitHub and GitLab adapters). Free-form params (titles, bodies, messages, branch names) are deliberately not restricted. (#19)
+
+### Bug fixes
+- **`save`/`ship` commit exactly the plan's file list.** `_exec_commit` ran `git commit -m` with no pathspec, committing the whole index — an unrelated already-staged file (or one removed via `modify_plan(exclude=…)`, which only filtered the stage step) still landed in the commit. The commit step now carries the plan's explicit pathspec (`git commit -m <msg> -- <files>`); plans without a file list keep the bare-commit behavior. `modify_plan(exclude=…)` filters the commit pathspec too. (#19)
+- **`issue_close(reason="not-planned")` works now.** The documented hyphenated spelling was passed to gh verbatim, which rejects it; it is normalized to the `"not planned"` form gh accepts.
+- **Platform API-response models tolerate unknown fields** instead of crashing on `unexpected keyword argument` when gh/glab JSON grows a field or adapter/model modules skew across an editable-install upgrade. (#24)
+
+### Changed
+- **Removed the dead `auto_confirm_safe_verbs` runtime-config knob.** It was settable, validated, and documented but consumed nowhere. Wiring it up would have added an auto-confirm bypass of the plan→confirm gate, so it was removed rather than activated. (#19)
+- **Truthful stash warnings on `switch`/`start`.** Both warned "Dirty changes will be stashed" even when the only dirt was untracked files — which `git stash push` (as jetsam invokes it, without `-u`) does not capture. Untracked-only trees now plan no stash steps and get an informational "untracked files are not stashed; they stay in place" note; trees with tracked dirt get a warning that says *tracked* changes are stashed. (#19)
+
 ## v1.1.6
 
 ### Bug fixes

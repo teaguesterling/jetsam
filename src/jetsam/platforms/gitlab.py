@@ -6,7 +6,16 @@ import json
 import subprocess
 from typing import Any
 
-from jetsam.platforms.base import CheckResult, IssueDetails, Platform, PlatformError, PRDetails
+from jetsam.platforms.base import (
+    ISSUE_STATES,
+    MERGE_STRATEGIES,
+    PR_STATES,
+    CheckResult,
+    IssueDetails,
+    Platform,
+    PlatformError,
+    PRDetails,
+)
 
 
 class GitLabPlatform(Platform):
@@ -91,6 +100,10 @@ class GitLabPlatform(Platform):
         author: str | None = None,
     ) -> list[PRDetails]:
         """List merge requests."""
+        if state not in PR_STATES:
+            raise ValueError(
+                f"invalid PR state filter {state!r}; expected one of {PR_STATES}"
+            )
         # glab uses "opened" instead of "open"
         glab_state = "opened" if state == "open" else state
         args = [
@@ -138,6 +151,10 @@ class GitLabPlatform(Platform):
         delete_branch: bool = True,
     ) -> bool:
         """Merge an MR."""
+        if strategy not in MERGE_STRATEGIES:
+            raise ValueError(
+                f"invalid merge strategy {strategy!r}; expected one of {MERGE_STRATEGIES}"
+            )
         args = ["mr", "merge", str(pr_number)]
         if strategy == "squash":
             args.append("--squash")
@@ -175,6 +192,10 @@ class GitLabPlatform(Platform):
         labels: list[str] | None = None,
     ) -> list[IssueDetails]:
         """List issues."""
+        if state not in ISSUE_STATES:
+            raise ValueError(
+                f"invalid issue state filter {state!r}; expected one of {ISSUE_STATES}"
+            )
         glab_state = "opened" if state == "open" else state
         args = [
             "issue", "list",

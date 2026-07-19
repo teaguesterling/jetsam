@@ -173,6 +173,16 @@ def plan_sync(
     strategy: str | None = None,
 ) -> Plan:
     """Generate a plan for the 'sync' verb (fetch + rebase/merge + push)."""
+    # Allowlist the sync strategy at plan-build time (mirrors the CLI's
+    # click.Choice). An out-of-set value is rejected, never coerced — the
+    # previous behavior silently fell back to "merge" (issue #19 follow-up).
+    from jetsam.config.runtime import SYNC_STRATEGIES
+
+    if strategy is not None and strategy not in SYNC_STRATEGIES:
+        raise ValueError(
+            f"invalid sync strategy {strategy!r}; expected one of {SYNC_STRATEGIES}"
+        )
+
     steps: list[PlanStep] = []
     warnings: list[str] = []
 
@@ -439,15 +449,26 @@ def plan_switch(
     steps: list[PlanStep] = []
     warnings: list[str] = []
 
-    if state.dirty:
+    # `git stash push` (as jetsam invokes it, without -u) only captures
+    # tracked changes; untracked files are left in place by both stash and
+    # checkout. Only plan (and claim) a stash when there is tracked dirt, so
+    # the warning is truthful for untracked-only trees (issue #19).
+    tracked_dirty = state.dirty and bool(state.staged or state.unstaged)
+
+    if tracked_dirty:
         msg = f"jetsam switch from {state.branch}"
         steps.append(PlanStep(action="stash", params={"message": msg}))
 
     steps.append(PlanStep(action="checkout", params={"branch": branch, "create": create}))
 
-    if state.dirty:
+    if tracked_dirty:
         steps.append(PlanStep(action="stash_pop"))
-        warnings.append("Dirty changes will be stashed and restored on the target branch")
+        warnings.append("Tracked changes will be stashed and restored on the target branch")
+    elif state.dirty and state.untracked:
+        warnings.append(
+            "Untracked files present — they are not stashed and stay in the "
+            "working tree (no data-loss risk)"
+        )
 
     return Plan(
         plan_id=plan_id,
@@ -516,19 +537,28 @@ def plan_start(
             params={"branch": branch_name, "base": actual_base},
         ))
     else:
-        if state.dirty:
-            warnings.append("Dirty changes will be stashed before switching")
+        # See plan_switch: `git stash push` (no -u) does not capture untracked
+        # files, so only plan/claim a stash when there is tracked dirt.
+        tracked_dirty = state.dirty and bool(state.staged or state.unstaged)
+
+        if tracked_dirty:
+            warnings.append("Tracked changes will be stashed and restored before switching")
             steps.append(PlanStep(
                 action="stash",
                 params={"message": f"jetsam start: stash before {branch_name}"},
             ))
+        elif state.dirty and state.untracked:
+            warnings.append(
+                "Untracked files present — they are not stashed and stay in the "
+                "working tree (no data-loss risk)"
+            )
 
         steps.append(PlanStep(
             action="checkout",
             params={"branch": branch_name, "create": True, "start_point": actual_base},
         ))
 
-        if state.dirty:
+        if tracked_dirty:
             steps.append(PlanStep(action="stash_pop"))
 
     return Plan(

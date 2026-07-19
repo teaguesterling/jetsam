@@ -5,11 +5,12 @@ import click
 from jetsam.core.output import format_json
 from jetsam.core.state import build_state
 from jetsam.platforms import get_platform
+from jetsam.platforms.base import ISSUE_STATES
 
 
 @click.command()
 @click.option("--state", "issue_state", default="open",
-              type=click.Choice(["open", "closed", "all"]),
+              type=click.Choice(list(ISSUE_STATES)),
               help="Filter by state (default: open)")
 @click.option("--label", "labels", multiple=True, help="Filter by label (repeatable)")
 @click.pass_context

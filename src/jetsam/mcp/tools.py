@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 if TYPE_CHECKING:
     from jetsam.platforms.base import Platform
@@ -36,6 +36,68 @@ from jetsam.platforms.base import (
 )
 
 _plan_store: PlanStore | None = None
+
+
+# ── Published result shapes ──────────────────────────────────────────
+#
+# FastMCP derives each tool's outputSchema from its return annotation, so a
+# bare `dict[str, Any]` published {"additionalProperties": true} — an object
+# with no key names. A programmatic caller then guesses, and a wrong guess
+# produces a program that validates, runs, and answers incorrectly (measured:
+# 0/24 correct while 17/24 called the right tool).
+#
+# These matter more than most because they carry jetsam's central invariant:
+# the planning verbs return a PLAN and commit nothing; `confirm` executes it.
+# A caller that cannot see `plan_id` in the response has no reason to suspect
+# a second call is needed — which is the reported failure exactly, a model
+# calling save and stopping, 4/4 trials.
+#
+# Keys are taken from Plan.to_dict() and ExecutionResult.to_dict(). total=False
+# because several are conditional: `exclude_remote_tracking` is only emitted
+# when set, `rollback_hint` only on a partial execution, and every verb can
+# return an error shape instead.
+
+
+class JetsamErrorResult(TypedDict, total=False):
+    """JetsamError.to_dict() — the alternative return of almost every tool."""
+    error: str
+    message: str
+    suggested_action: str
+    recoverable: bool
+
+
+class PlanResult(TypedDict, total=False):
+    """Plan.to_dict(). `plan_id` is the handle confirm() requires."""
+    plan_id: str
+    verb: str
+    steps: list[dict[str, Any]]
+    warnings: list[str]
+    params: dict[str, Any]
+    scope: list[str] | None
+    state_hash: str
+    exclude_remote_tracking: bool
+
+
+class ExecutionResult(TypedDict, total=False):
+    """ExecutionResult.to_dict() — what confirm() returns once it has run."""
+    plan_id: str
+    status: str
+    results: list[dict[str, Any]]
+    completed_steps: int
+    total_steps: int
+    rollback_hint: str
+
+
+class GitResult(TypedDict, total=False):
+    ok: bool
+    stdout: str
+    stderr: str
+    returncode: int
+
+
+class CancelResult(TypedDict, total=False):
+    ok: bool
+    id: str
 
 
 def _get_platform(state: Any) -> Platform | None:
@@ -110,7 +172,7 @@ def register_tools(mcp: FastMCP) -> None:
         exclude: str | None = None,
         files: list[str] | None = None,
         cwd: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> PlanResult | JetsamErrorResult:
         """Stage and commit changes. Returns a plan to confirm().
 
         Args:
@@ -136,7 +198,7 @@ def register_tools(mcp: FastMCP) -> None:
         return plan.to_dict()
 
     @mcp.tool()
-    def sync(strategy: str | None = None, cwd: str | None = None) -> dict[str, Any]:
+    def sync(strategy: str | None = None, cwd: str | None = None) -> PlanResult | JetsamErrorResult:
         """Fetch, rebase/merge, and push. Returns a plan to confirm().
 
         Args:
@@ -165,7 +227,7 @@ def register_tools(mcp: FastMCP) -> None:
         merge: bool | None = None,
         draft: bool | None = None,
         cwd: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> PlanResult | JetsamErrorResult:
         """Full pipeline: stage, commit, push, open PR. Returns a plan.
 
         Args:
@@ -275,7 +337,7 @@ def register_tools(mcp: FastMCP) -> None:
             return {"diff": result.stdout, "ok": result.ok}
 
     @mcp.tool()
-    def switch(branch: str, create: bool = False, cwd: str | None = None) -> dict[str, Any]:
+    def switch(branch: str, create: bool = False, cwd: str | None = None) -> PlanResult | JetsamErrorResult:
         """Switch branches with automatic stash/unstash. Returns a plan.
 
         Args:
@@ -369,7 +431,7 @@ def register_tools(mcp: FastMCP) -> None:
         base: str | None = None,
         prefix: str | None = None,
         cwd: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> PlanResult | JetsamErrorResult:
         """Start work on an issue or feature. Returns a plan to confirm().
 
         Args:
@@ -408,7 +470,7 @@ def register_tools(mcp: FastMCP) -> None:
         strategy: str | None = None,
         no_delete: bool | None = None,
         cwd: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> PlanResult | JetsamErrorResult:
         """Merge PR and clean up branch. Returns a plan to confirm().
 
         Args:
@@ -445,7 +507,7 @@ def register_tools(mcp: FastMCP) -> None:
         return plan.to_dict()
 
     @mcp.tool()
-    def tidy(cwd: str | None = None) -> dict[str, Any]:
+    def tidy(cwd: str | None = None) -> PlanResult | JetsamErrorResult:
         """Prune merged branches and stale refs. Returns a plan to confirm()."""
         state = build_state(cwd=cwd)
         pid = generate_plan_id()
@@ -609,7 +671,7 @@ def register_tools(mcp: FastMCP) -> None:
         notes: str = "",
         draft: bool = False,
         cwd: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> PlanResult | JetsamErrorResult:
         """Tag, push, and create a platform release. Returns a plan to confirm().
 
         Args:
@@ -631,7 +693,7 @@ def register_tools(mcp: FastMCP) -> None:
         return plan.to_dict()
 
     @mcp.tool()
-    def show_plan(id: str) -> dict[str, Any]:
+    def show_plan(id: str) -> PlanResult | JetsamErrorResult:
         """Show current state of a plan.
 
         Args:
@@ -652,7 +714,7 @@ def register_tools(mcp: FastMCP) -> None:
         id: str,
         message: str | None = None,
         exclude: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> PlanResult | JetsamErrorResult:
         """Modify an existing plan before confirming.
 
         Args:
@@ -676,7 +738,7 @@ def register_tools(mcp: FastMCP) -> None:
         return result
 
     @mcp.tool()
-    def confirm(id: str) -> dict[str, Any]:
+    def confirm(id: str) -> ExecutionResult | JetsamErrorResult:
         """Execute a plan. Validates repo state hasn't changed since planning.
 
         Args:
@@ -700,7 +762,7 @@ def register_tools(mcp: FastMCP) -> None:
         return result.to_dict()
 
     @mcp.tool()
-    def cancel(id: str) -> dict[str, Any]:
+    def cancel(id: str) -> CancelResult:
         """Cancel a plan without executing.
 
         Args:
@@ -710,7 +772,7 @@ def register_tools(mcp: FastMCP) -> None:
         return {"ok": True, "id": id}
 
     @mcp.tool()
-    def git(args: list[str]) -> dict[str, Any]:
+    def git(args: list[str]) -> GitResult:
         """Run any git command (pass-through).
 
         Args:

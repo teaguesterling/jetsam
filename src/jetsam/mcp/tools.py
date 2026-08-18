@@ -3,7 +3,17 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import TYPE_CHECKING, Any, TypedDict
+import sys
+from typing import TYPE_CHECKING, Any
+
+# pydantic refuses to build a schema from `typing.TypedDict` below 3.12
+# ("Please use typing_extensions.TypedDict instead"). jetsam supports 3.10+,
+# so the stdlib import breaks every MCP tool there — as it did in 1.2.0, whose
+# CI caught it on 3.10 while a 3.14 dev interpreter did not.
+if sys.version_info >= (3, 12):
+    from typing import TypedDict
+else:
+    from typing_extensions import TypedDict
 
 if TYPE_CHECKING:
     from jetsam.platforms.base import Platform

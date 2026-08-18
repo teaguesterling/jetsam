@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "jetsam-mcp"
-version = "1.2.0"
+version = "1.2.1"
 description = "Git workflow accelerator for humans and agents"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -31,6 +31,8 @@ dependencies = [
     # ModuleNotFoundError before serving anything. Lifting this means porting
     # to the standalone `fastmcp` distribution first.
     "mcp>=1.0,<2",
+    # pydantic will not build a schema from `typing.TypedDict` below 3.12.
+    "typing_extensions>=4.0;python_version<'3.12'",
     "pyyaml>=6.0",
 ]
 

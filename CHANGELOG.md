@@ -1,6 +1,21 @@
 # Changelog
 
-## v1.2.0
+## v1.2.1
+
+### Fixed — the 1.2.0 TypedDicts broke Python 3.10 and 3.11
+
+pydantic refuses to build a schema from `typing.TypedDict` below 3.12, so the
+annotations added in 1.2.0 raised on import for every supported interpreter
+under 3.12. `requires-python` is `>=3.10`.
+
+1.2.0 never reached PyPI — the publish workflow gates on the test matrix and
+the 3.10 job failed, which is the gate working. This release carries the same
+changes with the import fixed.
+
+Now imported from `typing_extensions` below 3.12, with the backport declared as
+a conditional dependency. Verified on a real 3.11 interpreter: 506 tests pass.
+
+## v1.2.0 (never published — see 1.2.1)
 
 ### Fixed — `jetsam serve` did not start on a fresh install
 

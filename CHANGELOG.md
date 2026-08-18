@@ -1,5 +1,38 @@
 # Changelog
 
+## v1.2.0
+
+### Fixed — `jetsam serve` did not start on a fresh install
+
+The `mcp>=1.0` dependency was unbounded, so a new install resolved to mcp 2.x,
+which removed `mcp.server.fastmcp`. Both `jetsam/mcp/server.py` and
+`jetsam/mcp/tools.py` import it at module scope, so the server exited with
+`ModuleNotFoundError` before answering a single request. Now pinned to
+`mcp>=1.0,<2`; lifting that bound means porting to the standalone `fastmcp`
+distribution.
+
+### Added — MCP tools publish the names of the keys they return (#25)
+
+FastMCP derives `outputSchema` from the return annotation, so `dict[str, Any]`
+published `{"additionalProperties": true}` — an object with no key names, which
+leaves a programmatic caller guessing. Measured across four local models:
+**0/24 correct while 17/24 called the right tool**. `log` was already annotated
+and was the single cleanly traceable fix in the reporter's prototype: a program
+that had been failing with `'list' object has no attribute 'split'` iterated it
+correctly once the shape was published.
+
+These shapes carry jetsam's central invariant, which is why they matter more
+than most. The planning verbs return a **plan** and commit nothing; `confirm`
+executes it. A caller that cannot see `plan_id` in the response has no reason
+to suspect a second call is required — which is the reported failure exactly, a
+model calling `save` and stopping, 4/4 trials.
+
+13 tools annotated, with keys taken from `Plan.to_dict()` and
+`ExecutionResult.to_dict()`. The planning verbs and `confirm` return a union
+with the error shape, since almost any of them can return `JetsamError`
+instead.
+
+
 ## v1.1.7
 
 ### Security

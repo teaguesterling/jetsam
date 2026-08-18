@@ -25,7 +25,12 @@ classifiers = [
 ]
 dependencies = [
     "click>=8.1",
-    "mcp>=1.0",
+    # UPPER BOUND IS LOAD-BEARING. mcp 2.0 removed `mcp.server.fastmcp`,
+    # which jetsam imports in mcp/server.py and mcp/tools.py, so an unbounded
+    # `>=1.0` resolves to 2.x on a fresh install and `jetsam serve` dies with
+    # ModuleNotFoundError before serving anything. Lifting this means porting
+    # to the standalone `fastmcp` distribution first.
+    "mcp>=1.0,<2",
     "pyyaml>=6.0",
 ]
 

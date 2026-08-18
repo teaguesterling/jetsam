@@ -32,6 +32,7 @@ pytest.importorskip("mcp.server.fastmcp")
 @pytest.fixture(scope="module")
 def tools():
     from mcp.server.fastmcp import FastMCP
+
     from jetsam.mcp.tools import register_tools
 
     server = FastMCP("schema-test")

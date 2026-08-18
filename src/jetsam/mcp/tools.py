@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
 import sys
+from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
 # pydantic refuses to build a schema from `typing.TypedDict` below 3.12
@@ -208,7 +208,9 @@ def register_tools(mcp: FastMCP) -> None:
         return plan.to_dict()
 
     @mcp.tool()
-    def sync(strategy: str | None = None, cwd: str | None = None) -> PlanResult | JetsamErrorResult:
+    def sync(
+        strategy: str | None = None, cwd: str | None = None
+    ) -> PlanResult | JetsamErrorResult:
         """Fetch, rebase/merge, and push. Returns a plan to confirm().
 
         Args:
@@ -347,7 +349,9 @@ def register_tools(mcp: FastMCP) -> None:
             return {"diff": result.stdout, "ok": result.ok}
 
     @mcp.tool()
-    def switch(branch: str, create: bool = False, cwd: str | None = None) -> PlanResult | JetsamErrorResult:
+    def switch(
+        branch: str, create: bool = False, cwd: str | None = None
+    ) -> PlanResult | JetsamErrorResult:
         """Switch branches with automatic stash/unstash. Returns a plan.
 
         Args:

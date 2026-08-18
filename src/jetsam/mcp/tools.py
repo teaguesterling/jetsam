@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 from dataclasses import asdict
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 # pydantic refuses to build a schema from `typing.TypedDict` below 3.12
 # ("Please use typing_extensions.TypedDict instead"). jetsam supports 3.10+,
@@ -205,7 +205,7 @@ def register_tools(mcp: FastMCP) -> None:
             config=config,
         )
         _get_store().save(plan)
-        return plan.to_dict()
+        return cast("PlanResult | JetsamErrorResult", plan.to_dict())
 
     @mcp.tool()
     def sync(
@@ -221,12 +221,15 @@ def register_tools(mcp: FastMCP) -> None:
                 falling back to the `git` passthrough.
         """
         if strategy is not None and strategy not in SYNC_STRATEGIES:
-            return _invalid_argument_error("sync strategy", strategy, SYNC_STRATEGIES)
+            return cast(
+                "PlanResult | JetsamErrorResult",
+                _invalid_argument_error("sync strategy", strategy, SYNC_STRATEGIES),
+            )
         state = build_state(cwd=cwd)
         pid = generate_plan_id()
         plan = plan_sync(state, plan_id=pid, strategy=strategy)
         _get_store().save(plan)
-        return plan.to_dict()
+        return cast("PlanResult | JetsamErrorResult", plan.to_dict())
 
     @mcp.tool()
     def ship(
@@ -267,7 +270,7 @@ def register_tools(mcp: FastMCP) -> None:
             config=config,
         )
         _get_store().save(plan)
-        return plan.to_dict()
+        return cast("PlanResult | JetsamErrorResult", plan.to_dict())
 
     @mcp.tool()
     def log(
@@ -365,7 +368,7 @@ def register_tools(mcp: FastMCP) -> None:
         pid = generate_plan_id()
         plan = plan_switch(state, plan_id=pid, branch=branch, create=create)
         _get_store().save(plan)
-        return plan.to_dict()
+        return cast("PlanResult | JetsamErrorResult", plan.to_dict())
 
     @mcp.tool()
     def pr_view(branch: str | None = None, cwd: str | None = None) -> dict[str, Any]:
@@ -477,7 +480,7 @@ def register_tools(mcp: FastMCP) -> None:
             config=config,
         )
         _get_store().save(plan)
-        return plan.to_dict()
+        return cast("PlanResult | JetsamErrorResult", plan.to_dict())
 
     @mcp.tool()
     def finish(
@@ -512,13 +515,13 @@ def register_tools(mcp: FastMCP) -> None:
         except ValueError as e:
             # plan_finish allowlists the merge strategy (explicit param or a
             # bad config value); surface it as the standard error dict.
-            return JetsamError(
+            return cast("PlanResult | JetsamErrorResult", JetsamError(
                 error="invalid_argument",
                 message=str(e),
                 recoverable=True,
-            ).to_dict()
+            ).to_dict())
         _get_store().save(plan)
-        return plan.to_dict()
+        return cast("PlanResult | JetsamErrorResult", plan.to_dict())
 
     @mcp.tool()
     def tidy(cwd: str | None = None) -> PlanResult | JetsamErrorResult:
@@ -527,7 +530,7 @@ def register_tools(mcp: FastMCP) -> None:
         pid = generate_plan_id()
         plan = plan_tidy(state, plan_id=pid)
         _get_store().save(plan)
-        return plan.to_dict()
+        return cast("PlanResult | JetsamErrorResult", plan.to_dict())
 
     @mcp.tool()
     def issues(
@@ -704,7 +707,7 @@ def register_tools(mcp: FastMCP) -> None:
             tag=tag, title=title, notes=notes, draft=draft,
         )
         _get_store().save(plan)
-        return plan.to_dict()
+        return cast("PlanResult | JetsamErrorResult", plan.to_dict())
 
     @mcp.tool()
     def show_plan(id: str) -> PlanResult | JetsamErrorResult:
@@ -715,13 +718,13 @@ def register_tools(mcp: FastMCP) -> None:
         """
         plan = _get_store().load(id)
         if plan is None:
-            return JetsamError(
+            return cast("PlanResult | JetsamErrorResult", JetsamError(
                 error="plan_not_found",
                 message=f"Plan {id} not found or expired.",
                 suggested_action="Re-run the original command.",
                 recoverable=True,
-            ).to_dict()
-        return plan.to_dict()
+            ).to_dict())
+        return cast("PlanResult | JetsamErrorResult", plan.to_dict())
 
     @mcp.tool()
     def modify_plan(
@@ -738,18 +741,18 @@ def register_tools(mcp: FastMCP) -> None:
         """
         plan = _get_store().load(id)
         if plan is None:
-            return JetsamError(
+            return cast("PlanResult | JetsamErrorResult", JetsamError(
                 error="plan_not_found",
                 message=f"Plan {id} not found or expired.",
                 suggested_action="Re-run the original command.",
                 recoverable=True,
-            ).to_dict()
+            ).to_dict())
 
         plan_diff = update_plan(plan, message=message, exclude=exclude)
         _get_store().save(plan)
         result = plan.to_dict()
         result["diff"] = plan_diff
-        return result
+        return cast("PlanResult | JetsamErrorResult", result)
 
     @mcp.tool()
     def confirm(id: str) -> ExecutionResult | JetsamErrorResult:
@@ -761,7 +764,7 @@ def register_tools(mcp: FastMCP) -> None:
         store = _get_store()
         plan = store.load(id)
         if plan is None:
-            return JetsamError(
+            return cast("ExecutionResult | JetsamErrorResult", JetsamError(
                 error="plan_not_found",
                 message=(
                     f"Plan {id} not found or expired "
@@ -769,11 +772,11 @@ def register_tools(mcp: FastMCP) -> None:
                 ),
                 suggested_action="Re-run the original command.",
                 recoverable=True,
-            ).to_dict()
+            ).to_dict())
 
         result = execute_plan(plan, cwd=plan.repo_root or None)
         store.delete(id)
-        return result.to_dict()
+        return cast("ExecutionResult | JetsamErrorResult", result.to_dict())
 
     @mcp.tool()
     def cancel(id: str) -> CancelResult:

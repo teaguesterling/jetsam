@@ -8,6 +8,7 @@ from jetsam.core.planner import (
     plan_ship,
     plan_start,
     plan_sync,
+    plan_tag,
     plan_tidy,
 )
 from jetsam.core.state import PRInfo, RepoState
@@ -695,3 +696,66 @@ class TestFilesSentinelAndNoise:
         )
         stage = next(s for s in plan.steps if s.action == "stage")
         assert stage.params["files"] == [".kibitzer/state.json"]
+
+
+class TestForcePush:
+    def test_sync_force_with_lease(self):
+        state = _make_state(dirty=False)
+        plan = plan_sync(state, plan_id="p_test", force_with_lease=True)
+        push_step = next(s for s in plan.steps if s.action == "push")
+        assert push_step.params.get("force_with_lease") is True
+        assert any("force-with-lease" in w.lower() for w in plan.warnings)
+
+    def test_sync_force(self):
+        state = _make_state(dirty=False)
+        plan = plan_sync(state, plan_id="p_test", force=True)
+        push_step = next(s for s in plan.steps if s.action == "push")
+        assert push_step.params.get("force") is True
+        assert any("force push enabled" in w.lower() for w in plan.warnings)
+
+    def test_sync_force_on_default_branch_warning(self):
+        state = _make_state(branch="main", dirty=False)
+        plan = plan_sync(state, plan_id="p_test", force_with_lease=True)
+        assert any("dangerous" in w.lower() for w in plan.warnings)
+
+    def test_ship_force_with_lease(self):
+        state = _make_state(dirty=False)
+        plan = plan_ship(state, plan_id="p_test", force_with_lease=True, config=_DEFAULT_CONFIG)
+        push_step = next(s for s in plan.steps if s.action == "push")
+        assert push_step.params.get("force_with_lease") is True
+
+
+class TestPlanTag:
+    def test_create_tag_annotated(self):
+        state = _make_state(dirty=False)
+        plan = plan_tag(state, plan_id="p_test", action="create", tag="v1.0.0", message="release 1.0.0")
+        assert plan.verb == "tag"
+        assert len(plan.steps) == 1
+        assert plan.steps[0].action == "tag_create"
+        assert plan.steps[0].params["tag"] == "v1.0.0"
+        assert plan.steps[0].params["annotate"] is True
+        assert plan.steps[0].params["message"] == "release 1.0.0"
+
+    def test_create_tag_lightweight_with_push(self):
+        state = _make_state(dirty=False)
+        plan = plan_tag(state, plan_id="p_test", action="create", tag="v1.0.0", annotate=False, push=True)
+        assert len(plan.steps) == 2
+        assert plan.steps[0].action == "tag_create"
+        assert plan.steps[0].params["annotate"] is False
+        assert plan.steps[1].action == "push_tag"
+        assert plan.steps[1].params["remote"] == "origin"
+
+    def test_delete_tag_local_and_remote(self):
+        state = _make_state(dirty=False)
+        plan = plan_tag(state, plan_id="p_test", action="delete", tag="v1.0.0", push=True, remote="upstream")
+        assert len(plan.steps) == 2
+        assert plan.steps[0].action == "tag_delete"
+        assert plan.steps[1].action == "push_tag_delete"
+        assert plan.steps[1].params["remote"] == "upstream"
+
+    def test_push_tag(self):
+        state = _make_state(dirty=False)
+        plan = plan_tag(state, plan_id="p_test", action="push", tag="v1.0.0")
+        assert len(plan.steps) == 1
+        assert plan.steps[0].action == "push_tag"
+        assert plan.steps[0].params["tag"] == "v1.0.0"

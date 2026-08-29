@@ -204,6 +204,10 @@ def _exec_push(step: PlanStep, cwd: str | None) -> StepResult:
     branch = step.params.get("branch", "")
     remote = step.params.get("remote", "origin")
     args = ["push"]
+    if step.params.get("force_with_lease"):
+        args.append("--force-with-lease")
+    elif step.params.get("force"):
+        args.append("--force")
     if step.params.get("set_upstream"):
         args.extend(["-u", remote, branch])
     else:
@@ -454,11 +458,30 @@ def _exec_worktree_prune(step: PlanStep, cwd: str | None) -> StepResult:
 
 def _exec_tag_create(step: PlanStep, cwd: str | None) -> StepResult:
     tag = step.params.get("tag", "")
-    message = step.params.get("message", tag)
-    result = run_git_sync(["tag", "-a", tag, "-m", message], cwd=cwd)
+    message = step.params.get("message")
+    annotate = step.params.get("annotate", True)
+    target = step.params.get("target")
+
+    args = ["tag"]
+    if annotate:
+        args.extend(["-a", tag, "-m", message or tag])
+    else:
+        args.append(tag)
+    if target:
+        args.append(target)
+
+    result = run_git_sync(args, cwd=cwd)
     if result.ok:
         return StepResult(step="tag_create", ok=True, details={"tag": tag})
     return StepResult(step="tag_create", ok=False, error=result.stderr.strip())
+
+
+def _exec_tag_delete(step: PlanStep, cwd: str | None) -> StepResult:
+    tag = step.params.get("tag", "")
+    result = run_git_sync(["tag", "-d", tag], cwd=cwd)
+    if result.ok:
+        return StepResult(step="tag_delete", ok=True, details={"tag": tag})
+    return StepResult(step="tag_delete", ok=False, error=result.stderr.strip())
 
 
 def _exec_push_tag(step: PlanStep, cwd: str | None) -> StepResult:
@@ -468,6 +491,15 @@ def _exec_push_tag(step: PlanStep, cwd: str | None) -> StepResult:
     if result.ok:
         return StepResult(step="push_tag", ok=True, details={"tag": tag, "remote": remote})
     return StepResult(step="push_tag", ok=False, error=result.stderr.strip())
+
+
+def _exec_push_tag_delete(step: PlanStep, cwd: str | None) -> StepResult:
+    tag = step.params.get("tag", "")
+    remote = step.params.get("remote", "origin")
+    result = run_git_sync(["push", remote, f":refs/tags/{tag}"], cwd=cwd)
+    if result.ok:
+        return StepResult(step="push_tag_delete", ok=True, details={"tag": tag, "remote": remote})
+    return StepResult(step="push_tag_delete", ok=False, error=result.stderr.strip())
 
 
 def _exec_release_create(step: PlanStep, cwd: str | None) -> StepResult:
@@ -510,7 +542,9 @@ _STEP_EXECUTORS: dict[str, Callable[..., StepResult]] = {
     "prune_merged_branches": _exec_prune_merged_branches,
     "worktree_prune": _exec_worktree_prune,
     "tag_create": _exec_tag_create,
+    "tag_delete": _exec_tag_delete,
     "push_tag": _exec_push_tag,
+    "push_tag_delete": _exec_push_tag_delete,
     "release_create": _exec_release_create,
 }
 

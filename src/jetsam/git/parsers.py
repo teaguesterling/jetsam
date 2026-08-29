@@ -370,3 +370,29 @@ def _host_to_platform(host: str) -> str:
     elif "gitlab" in host:
         return "gitlab"
     return "unknown"
+
+
+@dataclass
+class TagEntry:
+    """A git tag entry."""
+
+    name: str
+    commit: str = ""
+    date: str = ""
+    message: str = ""
+
+
+def parse_tag_list(output: str) -> list[TagEntry]:
+    """Parse git tag list output with structured formatting."""
+    entries: list[TagEntry] = []
+    for line in output.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split("|", 3)
+        name = parts[0]
+        commit = parts[1] if len(parts) > 1 else ""
+        date = parts[2] if len(parts) > 2 else ""
+        msg = parts[3] if len(parts) > 3 else ""
+        entries.append(TagEntry(name=name, commit=commit, date=date, message=msg))
+    return entries

@@ -20,6 +20,7 @@ ALIASES: dict[str, str] = {
     "t": "tidy",
     "i": "issues",
     "r": "release",
+    "g": "tag",      # 'g' for taG (t taken by tidy)
 }
 
 
@@ -95,6 +96,7 @@ from jetsam.cli.verbs.start import start  # noqa: E402
 from jetsam.cli.verbs.status import status  # noqa: E402
 from jetsam.cli.verbs.switch import switch  # noqa: E402
 from jetsam.cli.verbs.sync import sync  # noqa: E402
+from jetsam.cli.verbs.tag import tag  # noqa: E402
 from jetsam.cli.verbs.tidy import tidy  # noqa: E402
 
 cli.add_command(status)
@@ -113,6 +115,7 @@ cli.add_command(tidy)
 cli.add_command(issues)
 cli.add_command(prs)
 cli.add_command(release)
+cli.add_command(tag)
 cli.add_command(completions)
 cli.add_command(config)
 

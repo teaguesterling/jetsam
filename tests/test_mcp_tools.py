@@ -527,3 +527,37 @@ class TestErrorHelpers:
         assert result["error"] == "no_pr"
         assert "feature/foo" in result["message"]
         assert result["recoverable"] is True
+
+
+class TestTagTool:
+    def test_tag_list(self, tmp_git_repo: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("GIT_DIR", str(tmp_git_repo / ".git"))
+        monkeypatch.setenv("GIT_WORK_TREE", str(tmp_git_repo))
+
+        subprocess.run(["git", "tag", "-a", "v1.0.0", "-m", "initial release"], cwd=str(tmp_git_repo), check=True)
+
+        from mcp.server.fastmcp import FastMCP
+        mcp = FastMCP("test")
+        mcp_tools.register_tools(mcp)
+
+        tag_fn = mcp._tool_manager._tools["tag"].fn
+        result = tag_fn(action="list")
+
+        assert isinstance(result, list)
+        assert any(t["name"] == "v1.0.0" for t in result)
+
+    def test_tag_create_plan(self, tmp_git_repo: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("GIT_DIR", str(tmp_git_repo / ".git"))
+        monkeypatch.setenv("GIT_WORK_TREE", str(tmp_git_repo))
+
+        from mcp.server.fastmcp import FastMCP
+        mcp = FastMCP("test")
+        mcp_tools.register_tools(mcp)
+
+        tag_fn = mcp._tool_manager._tools["tag"].fn
+        plan = tag_fn(action="create", name="v1.1.0", message="new tag")
+
+        assert isinstance(plan, dict)
+        assert plan["verb"] == "tag"
+        assert plan["steps"][0]["action"] == "tag_create"
+        assert plan["steps"][0]["tag"] == "v1.1.0"

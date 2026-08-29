@@ -111,6 +111,61 @@ class TestDiffVerb:
         assert data["files_changed"] >= 1  # staged.py is staged
 
 
+class TestTagVerb:
+    def test_list_tags_json(self, tmp_git_repo: Path):
+        # Create a tag first
+        subprocess.run(["git", "tag", "-a", "v0.1.0", "-m", "first tag"], cwd=str(tmp_git_repo), check=True)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--json", "tag", "list"],
+            env={"GIT_DIR": str(tmp_git_repo / ".git"), "GIT_WORK_TREE": str(tmp_git_repo)},
+        )
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert isinstance(data, list)
+        assert any(t["name"] == "v0.1.0" for t in data)
+
+    def test_create_tag_execute(self, tmp_git_repo: Path):
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--json", "tag", "create", "v0.2.0", "-m", "second tag", "--execute"],
+            env={"GIT_DIR": str(tmp_git_repo / ".git"), "GIT_WORK_TREE": str(tmp_git_repo)},
+        )
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["status"] == "ok"
+
+        # Verify tag exists
+        tag_check = subprocess.run(["git", "tag", "-l", "v0.2.0"], cwd=str(tmp_git_repo), capture_output=True, text=True)
+        assert tag_check.stdout.strip() == "v0.2.0"
+
+    def test_delete_tag_execute(self, tmp_git_repo: Path):
+        subprocess.run(["git", "tag", "v0.3.0"], cwd=str(tmp_git_repo), check=True)
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--json", "tag", "delete", "v0.3.0", "--execute"],
+            env={"GIT_DIR": str(tmp_git_repo / ".git"), "GIT_WORK_TREE": str(tmp_git_repo)},
+        )
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["status"] == "ok"
+
+        tag_check = subprocess.run(["git", "tag", "-l", "v0.3.0"], cwd=str(tmp_git_repo), capture_output=True, text=True)
+        assert tag_check.stdout.strip() == ""
+
+
+class TestSyncForce:
+    def test_sync_force_with_lease_cli(self, tmp_git_repo: Path):
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["--json", "sync", "--force-with-lease", "--dry-run"],
+            env={"GIT_DIR": str(tmp_git_repo / ".git"), "GIT_WORK_TREE": str(tmp_git_repo)},
+        )
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["params"]["force_with_lease"] is True
+
+
 class TestPassthrough:
     def test_git_branch(self, tmp_git_repo: Path):
         runner = CliRunner()

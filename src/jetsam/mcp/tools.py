@@ -32,11 +32,12 @@ from jetsam.core.planner import (
     plan_start,
     plan_switch,
     plan_sync,
+    plan_tag,
     plan_tidy,
 )
 from jetsam.core.plans import PlanStore, generate_plan_id, update_plan
 from jetsam.core.state import attach_open_pr, build_state
-from jetsam.git.parsers import parse_diff_numstat, parse_log
+from jetsam.git.parsers import parse_diff_numstat, parse_log, parse_tag_list
 from jetsam.git.wrapper import run_git_sync
 from jetsam.platforms.base import (
     ISSUE_CLOSE_REASONS,
@@ -209,13 +210,18 @@ def register_tools(mcp: FastMCP) -> None:
 
     @mcp.tool()
     def sync(
-        strategy: str | None = None, cwd: str | None = None
+        strategy: str | None = None,
+        force_with_lease: bool = False,
+        force: bool = False,
+        cwd: str | None = None,
     ) -> PlanResult | JetsamErrorResult:
         """Fetch, rebase/merge, and push. Returns a plan to confirm().
 
         Args:
             strategy: "rebase" or "merge". Defaults to rebase on feature
                      branches, merge on default branch.
+            force_with_lease: Force push with lease (--force-with-lease).
+            force: Force push (--force).
             cwd: Working-directory override for this call. Defaults to
                 the MCP server's cwd. Use to operate on a non-cwd repo without
                 falling back to the `git` passthrough.
@@ -227,7 +233,13 @@ def register_tools(mcp: FastMCP) -> None:
             )
         state = build_state(cwd=cwd)
         pid = generate_plan_id()
-        plan = plan_sync(state, plan_id=pid, strategy=strategy)
+        plan = plan_sync(
+            state,
+            plan_id=pid,
+            strategy=strategy,
+            force_with_lease=force_with_lease,
+            force=force,
+        )
         _get_store().save(plan)
         return cast("PlanResult | JetsamErrorResult", plan.to_dict())
 
@@ -241,6 +253,8 @@ def register_tools(mcp: FastMCP) -> None:
         pr: bool | None = None,
         merge: bool | None = None,
         draft: bool | None = None,
+        force_with_lease: bool = False,
+        force: bool = False,
         cwd: str | None = None,
     ) -> PlanResult | JetsamErrorResult:
         """Full pipeline: stage, commit, push, open PR. Returns a plan.
@@ -256,6 +270,8 @@ def register_tools(mcp: FastMCP) -> None:
             pr: Create/update a PR. Defaults to config value or true.
             merge: Also merge the PR after creating it. Defaults to config value or false.
             draft: Create the PR as a draft. Defaults to config value or false.
+            force_with_lease: Force push with lease (--force-with-lease).
+            force: Force push (--force).
             cwd: Working-directory override for this call. Defaults to
                 the MCP server's cwd. Use to operate on a non-cwd repo without
                 falling back to the `git` passthrough.
@@ -268,6 +284,7 @@ def register_tools(mcp: FastMCP) -> None:
             message=message, include=include, exclude=exclude,
             files=files, to=to, open_pr=pr, merge=merge, draft=draft,
             config=config,
+            force_with_lease=force_with_lease, force=force,
         )
         _get_store().save(plan)
         return cast("PlanResult | JetsamErrorResult", plan.to_dict())
@@ -706,6 +723,91 @@ def register_tools(mcp: FastMCP) -> None:
             state, plan_id=pid,
             tag=tag, title=title, notes=notes, draft=draft,
         )
+        _get_store().save(plan)
+        return cast("PlanResult | JetsamErrorResult", plan.to_dict())
+
+    @mcp.tool()
+    def tag(
+        action: str = "list",
+        name: str | None = None,
+        message: str | None = None,
+        annotate: bool = True,
+        push: bool = False,
+        remote: str = "origin",
+        target: str | None = None,
+        count: int = 20,
+        sort: str = "-v:refname",
+        cwd: str | None = None,
+    ) -> list[dict[str, Any]] | PlanResult | JetsamErrorResult:
+        """List, create, delete, or push git tags.
+
+        For action="list", returns tag entries directly.
+        For action="create", "delete", "push", returns a plan to confirm().
+
+        Args:
+            action: "list" (default), "create", "delete", or "push".
+            name: Tag name (required for create, delete, push).
+            message: Optional tag annotation message (for create).
+            annotate: Create annotated tag (-a) if true (default), lightweight if false.
+            push: Also push (or delete on remote) when creating/deleting.
+            remote: Remote name for push operations (default: "origin").
+            target: Commit/ref to tag (default: HEAD).
+            count: Max tags to return when listing (default: 20).
+            sort: Sort field when listing (default: "-v:refname").
+            cwd: Working-directory override for this call.
+        """
+        if action == "list":
+            fmt = "%(refname:short)|%(objectname:short)|%(creatordate:iso-strict)|%(subject)"
+            args = ["tag", "-l", f"--sort={sort}", f"--format={fmt}"]
+            result = run_git_sync(args, cwd=cwd)
+            if not result.ok:
+                return cast(
+                    "JetsamErrorResult",
+                    JetsamError(
+                        error="git_error",
+                        message=result.stderr.strip(),
+                        recoverable=True,
+                    ).to_dict(),
+                )
+            entries = parse_tag_list(result.stdout)
+            if count and len(entries) > count:
+                entries = entries[:count]
+            return [asdict(e) for e in entries]
+
+        if not name:
+            return cast(
+                "JetsamErrorResult",
+                JetsamError(
+                    error="missing_argument",
+                    message="Tag name is required for create, delete, and push actions.",
+                    recoverable=False,
+                ).to_dict(),
+            )
+
+        state = build_state(cwd=cwd)
+        pid = generate_plan_id()
+        try:
+            plan = plan_tag(
+                state,
+                plan_id=pid,
+                action=action,
+                tag=name,
+                message=message,
+                annotate=annotate,
+                push=push,
+                remote=remote,
+                target=target,
+            )
+        except ValueError as e:
+            return cast(
+                "JetsamErrorResult",
+                JetsamError(
+                    error="invalid_argument",
+                    message=str(e),
+                    recoverable=False,
+                ).to_dict(),
+            )
+
         _get_store().save(plan)
         return cast("PlanResult | JetsamErrorResult", plan.to_dict())
 

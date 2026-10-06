@@ -13,12 +13,16 @@ from jetsam.core.state import build_state
 @click.command()
 @click.option("--strategy", type=click.Choice(list(SYNC_STRATEGIES)), default=None,
               help="Sync strategy (default: rebase for feature, merge for default)")
+@click.option("--force-with-lease", is_flag=True, help="Force push with lease")
+@click.option("-f", "--force", is_flag=True, help="Force push")
 @click.option("--dry-run", is_flag=True, help="Show plan without executing")
 @click.option("--execute", "auto_execute", is_flag=True, help="Execute without prompting")
 @click.pass_context
 def sync(
     ctx: click.Context,
     strategy: str | None,
+    force_with_lease: bool,
+    force: bool,
     dry_run: bool,
     auto_execute: bool,
 ) -> None:
@@ -26,7 +30,13 @@ def sync(
     state = build_state()
     plan_id = generate_plan_id()
 
-    plan = plan_sync(state, plan_id=plan_id, strategy=strategy)
+    plan = plan_sync(
+        state,
+        plan_id=plan_id,
+        strategy=strategy,
+        force_with_lease=force_with_lease,
+        force=force,
+    )
 
     json_mode = ctx.obj.get("json")
 

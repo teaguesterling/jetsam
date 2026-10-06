@@ -18,6 +18,8 @@ from jetsam.core.state import build_state
 @click.option("--no-pr", is_flag=True, help="Skip PR creation")
 @click.option("--draft", is_flag=True, help="Create PR as draft")
 @click.option("--merge", is_flag=True, help="Also merge the PR after creating it")
+@click.option("--force-with-lease", is_flag=True, help="Force push with lease")
+@click.option("-f", "--force", is_flag=True, help="Force push")
 @click.option("--dry-run", is_flag=True, help="Show plan without executing")
 @click.option("--execute", "auto_execute", is_flag=True, help="Execute without prompting")
 @click.pass_context
@@ -30,6 +32,8 @@ def ship(
     no_pr: bool,
     draft: bool,
     merge: bool,
+    force_with_lease: bool,
+    force: bool,
     dry_run: bool,
     auto_execute: bool,
 ) -> None:
@@ -52,6 +56,8 @@ def ship(
         merge=merge or None,
         draft=draft or None,
         config=config,
+        force_with_lease=force_with_lease,
+        force=force,
     )
 
     json_mode = ctx.obj.get("json")

@@ -171,6 +171,8 @@ def plan_sync(
     state: RepoState,
     plan_id: str,
     strategy: str | None = None,
+    force_with_lease: bool = False,
+    force: bool = False,
 ) -> Plan:
     """Generate a plan for the 'sync' verb (fetch + rebase/merge + push)."""
     # Allowlist the sync strategy at plan-build time (mirrors the CLI's
@@ -186,17 +188,26 @@ def plan_sync(
     steps: list[PlanStep] = []
     warnings: list[str] = []
 
+    is_default = state.branch == state.default_branch
+    if is_default and (force_with_lease or force):
+        warnings.append(
+            f"Warning: force pushing to default branch ({state.default_branch}) is dangerous"
+        )
+    if force_with_lease:
+        warnings.append("Force push with lease enabled (--force-with-lease)")
+    elif force:
+        warnings.append("Force push enabled (--force)")
+
     needs_stash = bool(state.staged or state.unstaged)
 
     if needs_stash:
         warnings.append("Working tree is dirty — changes will be stashed during sync")
         steps.append(PlanStep(action="stash", params={"message": "jetsam sync auto-stash"}))
 
-    # Fast path: default branch, ahead only, no staged/unstaged changes, no explicit strategy
-    is_default = state.branch == state.default_branch
+    # Fast path: default branch, ahead only, no staged/unstaged changes, no explicit strategy, no force
     fast_path = (
         is_default and state.ahead > 0 and state.behind == 0
-        and not needs_stash and strategy is None
+        and not needs_stash and strategy is None and not (force_with_lease or force)
     )
     if fast_path:
         steps.append(
@@ -216,7 +227,7 @@ def plan_sync(
             repo_root=state.repo_root, state_hash=state.compute_hash(exclude_remote_tracking=True),
             exclude_remote_tracking=True,
             warnings=warnings,
-            params={"strategy": strategy},
+            params={"strategy": strategy, "force_with_lease": force_with_lease, "force": force},
         )
 
     # Fetch
@@ -253,18 +264,18 @@ def plan_sync(
                 PlanStep(action="merge", params={"from": default_remote})
             )
 
-    # Push if there are local commits or after rebase
-    if state.ahead > 0 or not is_default:
-        steps.append(
-            PlanStep(
-                action="push",
-                params={
-                    "branch": state.branch,
-                    "remote": "origin",
-                    "set_upstream": state.upstream is None,
-                },
-            )
-        )
+    # Push if there are local commits or after rebase or if force push requested
+    if state.ahead > 0 or not is_default or force_with_lease or force:
+        push_params: dict[str, Any] = {
+            "branch": state.branch,
+            "remote": "origin",
+            "set_upstream": state.upstream is None,
+        }
+        if force_with_lease:
+            push_params["force_with_lease"] = True
+        elif force:
+            push_params["force"] = True
+        steps.append(PlanStep(action="push", params=push_params))
 
     if needs_stash:
         steps.append(PlanStep(action="stash_pop"))
@@ -276,7 +287,7 @@ def plan_sync(
         repo_root=state.repo_root, state_hash=state.compute_hash(exclude_remote_tracking=True),
         exclude_remote_tracking=True,
         warnings=warnings,
-        params={"strategy": strategy},
+        params={"strategy": strategy, "force_with_lease": force_with_lease, "force": force},
     )
 
 
@@ -292,6 +303,8 @@ def plan_ship(
     merge: bool | None = None,
     draft: bool | None = None,
     config: JetsamConfig | None = None,
+    force_with_lease: bool = False,
+    force: bool = False,
 ) -> Plan:
     """Generate a plan for the 'ship' verb (stage + commit + push + PR).
 
@@ -307,7 +320,14 @@ def plan_ship(
             plan_id=plan_id, verb="ship", steps=[],
             repo_root=state.repo_root, state_hash=state.compute_hash(),
             warnings=signing_warnings,
-            params={"message": message, "include": include, "exclude": exclude, "files": files},
+            params={
+                "message": message,
+                "include": include,
+                "exclude": exclude,
+                "files": files,
+                "force_with_lease": force_with_lease,
+                "force": force,
+            },
         )
 
     # Resolve defaults from config when not explicitly set
@@ -330,6 +350,11 @@ def plan_ship(
     steps: list[PlanStep] = []
     warnings: list[str] = []
     target_branch = to or state.default_branch
+
+    if force_with_lease:
+        warnings.append("Force push with lease enabled (--force-with-lease)")
+    elif force:
+        warnings.append("Force push enabled (--force)")
 
     # Stage files
     target_files = _resolve_files(state, include, exclude, files, noise_paths=config.noise_paths)
@@ -357,19 +382,24 @@ def plan_ship(
     elif not message:
         message = ""
 
-    # Push — if there are commits to push or we just committed. A branch
+    # Push — if there are commits to push or we just committed or force requested. A branch
     # with no upstream reports ahead=0 (nothing to count against), so it
     # must push regardless — otherwise ship(files=[]) on a fresh branch
     # plans pr_create against a branch the remote has never seen.
-    if has_something_to_commit or state.ahead > 0 or state.upstream is None:
+    if has_something_to_commit or state.ahead > 0 or state.upstream is None or force_with_lease or force:
+        push_params: dict[str, Any] = {
+            "branch": state.branch,
+            "remote": "origin",
+            "set_upstream": state.upstream is None,
+        }
+        if force_with_lease:
+            push_params["force_with_lease"] = True
+        elif force:
+            push_params["force"] = True
         steps.append(
             PlanStep(
                 action="push",
-                params={
-                    "branch": state.branch,
-                    "remote": "origin",
-                    "set_upstream": state.upstream is None,
-                },
+                params=push_params,
             )
         )
 
@@ -747,10 +777,89 @@ def plan_release(
         steps=steps,
         # release tags/pushes; a background fetch may shift ahead/behind
         # between plan and confirm, so ignore remote-tracking like sync/finish.
-        repo_root=state.repo_root, state_hash=state.compute_hash(exclude_remote_tracking=True),
+        repo_root=state.repo_root,
+        state_hash=state.compute_hash(exclude_remote_tracking=True),
         exclude_remote_tracking=True,
         warnings=warnings,
         params={"tag": tag, "title": actual_title, "notes": notes, "draft": draft},
+    )
+
+
+def plan_tag(
+    state: RepoState,
+    plan_id: str,
+    action: str,  # "create", "delete", "push"
+    tag: str,
+    message: str | None = None,
+    annotate: bool = True,
+    push: bool = False,
+    remote: str = "origin",
+    target: str | None = None,
+) -> Plan:
+    """Generate a plan for the 'tag' verb (create, delete, push tag).
+
+    Args:
+        state: Active repository state.
+        plan_id: Unique ID for the plan.
+        action: One of 'create', 'delete', 'push'.
+        tag: Tag name (e.g. "v1.0.0").
+        message: Optional tag annotation message.
+        annotate: If True, creates an annotated tag (-a). If False, lightweight.
+        push: If True with create/delete, also pushes/deletes tag on remote.
+        remote: Remote name (default "origin").
+        target: Optional specific commit/ref to tag.
+    """
+    from jetsam.git.wrapper import run_git_sync
+
+    steps: list[PlanStep] = []
+    warnings: list[str] = []
+
+    if action == "create":
+        tag_check = run_git_sync(["tag", "-l", tag], cwd=state.repo_root)
+        if tag_check.ok and tag_check.stdout.strip():
+            warnings.append(f"Tag {tag} already exists")
+        steps.append(
+            PlanStep(
+                action="tag_create",
+                params={
+                    "tag": tag,
+                    "message": message or tag,
+                    "annotate": annotate,
+                    "target": target,
+                },
+            )
+        )
+        if push:
+            steps.append(PlanStep(action="push_tag", params={"tag": tag, "remote": remote}))
+
+    elif action == "delete":
+        steps.append(PlanStep(action="tag_delete", params={"tag": tag}))
+        if push:
+            steps.append(PlanStep(action="push_tag_delete", params={"tag": tag, "remote": remote}))
+
+    elif action == "push":
+        steps.append(PlanStep(action="push_tag", params={"tag": tag, "remote": remote}))
+
+    else:
+        raise ValueError(f"Invalid tag action: {action!r}; expected 'create', 'delete', or 'push'")
+
+    return Plan(
+        plan_id=plan_id,
+        verb="tag",
+        steps=steps,
+        repo_root=state.repo_root,
+        state_hash=state.compute_hash(exclude_remote_tracking=True),
+        exclude_remote_tracking=True,
+        warnings=warnings,
+        params={
+            "action": action,
+            "tag": tag,
+            "message": message,
+            "annotate": annotate,
+            "push": push,
+            "remote": remote,
+            "target": target,
+        },
     )
 
 

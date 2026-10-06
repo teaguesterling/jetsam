@@ -221,7 +221,11 @@ def _show_plan_human(plan: Plan) -> None:
         elif step.action == "tag_delete":
             click.echo(f"  Delete tag: {step.params.get('tag')}")
         elif step.action == "push_tag":
-            click.echo(f"  Push tag: {step.params.get('tag')} -> {step.params.get('remote', 'origin')}")
+            tag = step.params.get("tag")
+            remote = step.params.get("remote", "origin")
+            click.echo(f"  Push tag: {tag} -> {remote}")
         elif step.action == "push_tag_delete":
-            click.echo(f"  Delete remote tag: {step.params.get('tag')} on {step.params.get('remote', 'origin')}")
+            tag = step.params.get("tag")
+            remote = step.params.get("remote", "origin")
+            click.echo(f"  Delete remote tag: {tag} on {remote}")
     click.echo()

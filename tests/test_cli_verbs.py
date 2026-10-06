@@ -114,7 +114,11 @@ class TestDiffVerb:
 class TestTagVerb:
     def test_list_tags_json(self, tmp_git_repo: Path):
         # Create a tag first
-        subprocess.run(["git", "tag", "-a", "v0.1.0", "-m", "first tag"], cwd=str(tmp_git_repo), check=True)
+        subprocess.run(
+            ["git", "tag", "-a", "v0.1.0", "-m", "first tag"],
+            cwd=str(tmp_git_repo),
+            check=True,
+        )
         runner = CliRunner()
         result = runner.invoke(
             cli, ["--json", "tag", "list"],
@@ -136,7 +140,12 @@ class TestTagVerb:
         assert data["status"] == "ok"
 
         # Verify tag exists
-        tag_check = subprocess.run(["git", "tag", "-l", "v0.2.0"], cwd=str(tmp_git_repo), capture_output=True, text=True)
+        tag_check = subprocess.run(
+            ["git", "tag", "-l", "v0.2.0"],
+            cwd=str(tmp_git_repo),
+            capture_output=True,
+            text=True,
+        )
         assert tag_check.stdout.strip() == "v0.2.0"
 
     def test_delete_tag_execute(self, tmp_git_repo: Path):
@@ -150,7 +159,12 @@ class TestTagVerb:
         data = json.loads(result.output)
         assert data["status"] == "ok"
 
-        tag_check = subprocess.run(["git", "tag", "-l", "v0.3.0"], cwd=str(tmp_git_repo), capture_output=True, text=True)
+        tag_check = subprocess.run(
+            ["git", "tag", "-l", "v0.3.0"],
+            cwd=str(tmp_git_repo),
+            capture_output=True,
+            text=True,
+        )
         assert tag_check.stdout.strip() == ""
 
 

@@ -534,7 +534,11 @@ class TestTagTool:
         monkeypatch.setenv("GIT_DIR", str(tmp_git_repo / ".git"))
         monkeypatch.setenv("GIT_WORK_TREE", str(tmp_git_repo))
 
-        subprocess.run(["git", "tag", "-a", "v1.0.0", "-m", "initial release"], cwd=str(tmp_git_repo), check=True)
+        subprocess.run(
+            ["git", "tag", "-a", "v1.0.0", "-m", "initial release"],
+            cwd=str(tmp_git_repo),
+            check=True,
+        )
 
         from mcp.server.fastmcp import FastMCP
         mcp = FastMCP("test")

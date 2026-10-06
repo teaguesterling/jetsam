@@ -204,7 +204,8 @@ def plan_sync(
         warnings.append("Working tree is dirty — changes will be stashed during sync")
         steps.append(PlanStep(action="stash", params={"message": "jetsam sync auto-stash"}))
 
-    # Fast path: default branch, ahead only, no staged/unstaged changes, no explicit strategy, no force
+    # Fast path: default branch, ahead only, clean tree,
+    # no explicit strategy, and no force options.
     fast_path = (
         is_default and state.ahead > 0 and state.behind == 0
         and not needs_stash and strategy is None and not (force_with_lease or force)
@@ -386,7 +387,13 @@ def plan_ship(
     # with no upstream reports ahead=0 (nothing to count against), so it
     # must push regardless — otherwise ship(files=[]) on a fresh branch
     # plans pr_create against a branch the remote has never seen.
-    if has_something_to_commit or state.ahead > 0 or state.upstream is None or force_with_lease or force:
+    if (
+        has_something_to_commit
+        or state.ahead > 0
+        or state.upstream is None
+        or force_with_lease
+        or force
+    ):
         push_params: dict[str, Any] = {
             "branch": state.branch,
             "remote": "origin",

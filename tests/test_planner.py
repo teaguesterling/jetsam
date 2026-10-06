@@ -728,7 +728,13 @@ class TestForcePush:
 class TestPlanTag:
     def test_create_tag_annotated(self):
         state = _make_state(dirty=False)
-        plan = plan_tag(state, plan_id="p_test", action="create", tag="v1.0.0", message="release 1.0.0")
+        plan = plan_tag(
+            state,
+            plan_id="p_test",
+            action="create",
+            tag="v1.0.0",
+            message="release 1.0.0",
+        )
         assert plan.verb == "tag"
         assert len(plan.steps) == 1
         assert plan.steps[0].action == "tag_create"
@@ -738,7 +744,14 @@ class TestPlanTag:
 
     def test_create_tag_lightweight_with_push(self):
         state = _make_state(dirty=False)
-        plan = plan_tag(state, plan_id="p_test", action="create", tag="v1.0.0", annotate=False, push=True)
+        plan = plan_tag(
+            state,
+            plan_id="p_test",
+            action="create",
+            tag="v1.0.0",
+            annotate=False,
+            push=True,
+        )
         assert len(plan.steps) == 2
         assert plan.steps[0].action == "tag_create"
         assert plan.steps[0].params["annotate"] is False
@@ -747,7 +760,14 @@ class TestPlanTag:
 
     def test_delete_tag_local_and_remote(self):
         state = _make_state(dirty=False)
-        plan = plan_tag(state, plan_id="p_test", action="delete", tag="v1.0.0", push=True, remote="upstream")
+        plan = plan_tag(
+            state,
+            plan_id="p_test",
+            action="delete",
+            tag="v1.0.0",
+            push=True,
+            remote="upstream",
+        )
         assert len(plan.steps) == 2
         assert plan.steps[0].action == "tag_delete"
         assert plan.steps[1].action == "push_tag_delete"

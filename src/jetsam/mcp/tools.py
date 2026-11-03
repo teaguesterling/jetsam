@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any, cast
@@ -127,6 +128,72 @@ def _get_store() -> PlanStore:
     return _plan_store
 
 
+def _resolve_root(cwd: str | None) -> str | None:
+    """Return the repository root for this call, or None if none was named.
+
+    The order is the `cwd` argument, then the session's `active_root`.  There
+    is deliberately no fall-through to the server's process cwd: that
+    directory is a real repository often enough that reading it answers
+    confidently about a project nobody asked about.  Measured 2026-11-03,
+    before this guard existed: with `active_root` set to one repo, `log()` and
+    `diff()` still answered for the server's own directory while `status()`
+    answered for `active_root` — two verbs disagreeing about the subject.
+
+    The resolver belongs to the MCP layer only.  `build_state`, `run_git_sync`
+    and the CLI verbs resolve from the process cwd on purpose, because for a
+    CLI that is the repository the user is standing in.
+    """
+    if cwd:
+        return cwd
+    from jetsam.config.runtime import get_runtime
+
+    return get_runtime().active_root
+
+
+def _root_error(root: str | None, cwd: str | None) -> dict[str, Any] | None:
+    """Return the error for an unusable root, or None when it is usable.
+
+    Two distinct failures, because the fix differs. Nothing was named, or
+    what was named is not a directory. The second is reachable through the
+    launch environment: an `.mcp.json` env value that does not expand lands
+    in active_root verbatim, and `run_git_sync` would then report it as
+    "git: command not found" (returncode 127), because its FileNotFoundError
+    handler cannot tell a missing git from a missing cwd.
+    """
+    if root is None:
+        return _no_root_error()
+    if not os.path.isdir(root):
+        source = "the cwd= argument" if cwd else "the session's active_root"
+        return JetsamError(
+            error="bad_root",
+            message=f"{root!r}, from {source}, is not a directory.",
+            suggested_action=(
+                "Check the path. An unexpanded placeholder such as "
+                '"${CLAUDE_PROJECT_DIR}" in a JETSAM_ACTIVE_ROOT env value '
+                "arrives here verbatim."
+            ),
+            recoverable=True,
+        ).to_dict()
+    return None
+
+
+def _no_root_error() -> dict[str, Any]:
+    """Standard error for a call that named no repository."""
+    return JetsamError(
+        error="no_root",
+        message=(
+            "No repository root for this call. The MCP server's own directory "
+            "is not used as a fallback, because it is usually not the repo you "
+            "mean."
+        ),
+        suggested_action=(
+            'Pass cwd="/path/to/repo" for this call, or set it for the session '
+            'with config(set={"active_root": "/path/to/repo"}).'
+        ),
+        recoverable=True,
+    ).to_dict()
+
+
 def _no_platform_error() -> dict[str, Any]:
     """Standard error for missing platform configuration."""
     return JetsamError(
@@ -172,8 +239,18 @@ def register_tools(mcp: FastMCP) -> None:
 
         Returns branch, dirty state, staged/unstaged/untracked files,
         ahead/behind counts, platform info, and PR details if available.
+
+        Args:
+            cwd: Repository to act on. Falls back to the session's
+                active_root; with neither, the call is refused rather than run
+                against the MCP server's own directory.
         """
-        state = build_state(cwd=cwd)
+        root = _resolve_root(cwd)
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return root_error
+
+        state = build_state(cwd=root)
         return state.to_dict()
 
     @mcp.tool()
@@ -193,11 +270,16 @@ def register_tools(mcp: FastMCP) -> None:
             files: Explicit file paths to stage. Pass [] to stage nothing
                 (e.g. ship(files=[]) = push + PR only on an already-committed
                 branch); None (default) auto-stages modified tracked files.
-            cwd: Working-directory override for this call. Defaults to
-                the MCP server's cwd. Use to operate on a non-cwd repo without
-                falling back to the `git` passthrough.
+            cwd: Repository to act on. Falls back to the session's
+                active_root; with neither, the call is refused rather than run
+                against the MCP server's own directory.
         """
-        state = build_state(cwd=cwd)
+        root = _resolve_root(cwd)
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("PlanResult | JetsamErrorResult", root_error)
+
+        state = build_state(cwd=root)
         config = load_config(state.repo_root)
         pid = generate_plan_id()
         plan = plan_save(
@@ -222,16 +304,21 @@ def register_tools(mcp: FastMCP) -> None:
                      branches, merge on default branch.
             force_with_lease: Force push with lease (--force-with-lease).
             force: Force push (--force).
-            cwd: Working-directory override for this call. Defaults to
-                the MCP server's cwd. Use to operate on a non-cwd repo without
-                falling back to the `git` passthrough.
+            cwd: Repository to act on. Falls back to the session's
+                active_root; with neither, the call is refused rather than run
+                against the MCP server's own directory.
         """
         if strategy is not None and strategy not in SYNC_STRATEGIES:
             return cast(
                 "PlanResult | JetsamErrorResult",
                 _invalid_argument_error("sync strategy", strategy, SYNC_STRATEGIES),
             )
-        state = build_state(cwd=cwd)
+        root = _resolve_root(cwd)
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("PlanResult | JetsamErrorResult", root_error)
+
+        state = build_state(cwd=root)
         pid = generate_plan_id()
         plan = plan_sync(
             state,
@@ -272,11 +359,16 @@ def register_tools(mcp: FastMCP) -> None:
             draft: Create the PR as a draft. Defaults to config value or false.
             force_with_lease: Force push with lease (--force-with-lease).
             force: Force push (--force).
-            cwd: Working-directory override for this call. Defaults to
-                the MCP server's cwd. Use to operate on a non-cwd repo without
-                falling back to the `git` passthrough.
+            cwd: Repository to act on. Falls back to the session's
+                active_root; with neither, the call is refused rather than run
+                against the MCP server's own directory.
         """
-        state = build_state(cwd=cwd)
+        root = _resolve_root(cwd)
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("PlanResult | JetsamErrorResult", root_error)
+
+        state = build_state(cwd=root)
         config = load_config(state.repo_root)
         pid = generate_plan_id()
         plan = plan_ship(
@@ -298,16 +390,21 @@ def register_tools(mcp: FastMCP) -> None:
         Args:
             n: Number of commits (default: 10).
             branch: Branch to show (default: current).
-            cwd: Working-directory override for this call. Defaults to
-                the MCP server's cwd. Use to operate on a non-cwd repo without
-                falling back to the `git` passthrough.
+            cwd: Repository to act on. Falls back to the session's
+                active_root; with neither, the call is refused rather than run
+                against the MCP server's own directory.
         """
+        root = _resolve_root(cwd)
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("list[dict[str, Any]] | dict[str, Any]", root_error)
+
         fmt = "%H%x00%h%x00%an%x00%aI%x00%s"
         args = ["log", f"--format={fmt}", f"-{n}"]
         if branch:
             args.append(branch)
 
-        result = run_git_sync(args, cwd=cwd)
+        result = run_git_sync(args, cwd=root)
         if not result.ok:
             return JetsamError(
                 error="git_error",
@@ -331,10 +428,15 @@ def register_tools(mcp: FastMCP) -> None:
             target: Diff target ref (default: working tree changes).
             stat: Return stat summary instead of full diff (default: true).
             staged: Diff staged changes instead of unstaged.
-            cwd: Working-directory override for this call. Defaults to
-                the MCP server's cwd. Use to operate on a non-cwd repo without
-                falling back to the `git` passthrough.
+            cwd: Repository to act on. Falls back to the session's
+                active_root; with neither, the call is refused rather than run
+                against the MCP server's own directory.
         """
+        root = _resolve_root(cwd)
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return root_error
+
         if stat:
             args = ["diff", "--numstat"]
             if staged:
@@ -342,7 +444,7 @@ def register_tools(mcp: FastMCP) -> None:
             if target:
                 args.append(target)
 
-            result = run_git_sync(args, cwd=cwd)
+            result = run_git_sync(args, cwd=root)
             if not result.ok:
                 return JetsamError(
                     error="git_error",
@@ -359,7 +461,7 @@ def register_tools(mcp: FastMCP) -> None:
             if target:
                 args.append(target)
 
-            result = run_git_sync(args, cwd=cwd)
+            result = run_git_sync(args, cwd=root)
             if not result.ok:
                 return JetsamError(
                     error="git_error",
@@ -377,11 +479,16 @@ def register_tools(mcp: FastMCP) -> None:
         Args:
             branch: Target branch to switch to.
             create: Create the branch if it doesn't exist.
-            cwd: Working-directory override for this call. Defaults to
-                the MCP server's cwd. Use to operate on a non-cwd repo without
-                falling back to the `git` passthrough.
+            cwd: Repository to act on. Falls back to the session's
+                active_root; with neither, the call is refused rather than run
+                against the MCP server's own directory.
         """
-        state = build_state(cwd=cwd)
+        root = _resolve_root(cwd)
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("PlanResult | JetsamErrorResult", root_error)
+
+        state = build_state(cwd=root)
         pid = generate_plan_id()
         plan = plan_switch(state, plan_id=pid, branch=branch, create=create)
         _get_store().save(plan)
@@ -393,11 +500,16 @@ def register_tools(mcp: FastMCP) -> None:
 
         Args:
             branch: Branch to check (default: current branch).
-            cwd: Working-directory override for this call. Defaults to
-                the MCP server's cwd. Use to operate on a non-cwd repo without
-                falling back to the `git` passthrough.
+            cwd: Repository to act on. Falls back to the session's
+                active_root; with neither, the call is refused rather than run
+                against the MCP server's own directory.
         """
-        state = build_state(cwd=cwd)
+        root = _resolve_root(cwd)
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return root_error
+
+        state = build_state(cwd=root)
         actual_branch = branch or state.branch
         platform = _get_platform(state)
         if platform is None:
@@ -418,13 +530,18 @@ def register_tools(mcp: FastMCP) -> None:
         Args:
             state: Filter by state: open, closed, merged, all.
             author: Filter by author username.
-            cwd: Working-directory override for this call. Defaults to
-                the MCP server's cwd. Use to operate on a non-cwd repo without
-                falling back to the `git` passthrough.
+            cwd: Repository to act on. Falls back to the session's
+                active_root; with neither, the call is refused rather than run
+                against the MCP server's own directory.
         """
         if state not in PR_STATES:
             return _invalid_argument_error("PR state filter", state, PR_STATES)
-        repo_state = build_state(cwd=cwd)
+        root = _resolve_root(cwd)
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("list[dict[str, Any]] | dict[str, Any]", root_error)
+
+        repo_state = build_state(cwd=root)
         platform = _get_platform(repo_state)
         if platform is None:
             return _no_platform_error()
@@ -439,11 +556,16 @@ def register_tools(mcp: FastMCP) -> None:
 
         Args:
             pr_number: PR number (default: PR for current branch).
-            cwd: Working-directory override for this call. Defaults to
-                the MCP server's cwd. Use to operate on a non-cwd repo without
-                falling back to the `git` passthrough.
+            cwd: Repository to act on. Falls back to the session's
+                active_root; with neither, the call is refused rather than run
+                against the MCP server's own directory.
         """
-        repo_state = build_state(cwd=cwd)
+        root = _resolve_root(cwd)
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("list[dict[str, Any]] | dict[str, Any]", root_error)
+
+        repo_state = build_state(cwd=root)
         platform = _get_platform(repo_state)
         if platform is None:
             return _no_platform_error()
@@ -473,11 +595,16 @@ def register_tools(mcp: FastMCP) -> None:
             worktree: Create a worktree instead of switching branches.
             base: Base branch (default: main/master).
             prefix: Branch name prefix (e.g. "feature/").
-            cwd: Working-directory override for this call. Defaults to
-                the MCP server's cwd. Use to operate on a non-cwd repo without
-                falling back to the `git` passthrough.
+            cwd: Repository to act on. Falls back to the session's
+                active_root; with neither, the call is refused rather than run
+                against the MCP server's own directory.
         """
-        state = build_state(cwd=cwd)
+        root = _resolve_root(cwd)
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("PlanResult | JetsamErrorResult", root_error)
+
+        state = build_state(cwd=root)
         config = load_config(state.repo_root)
         pid = generate_plan_id()
 
@@ -510,11 +637,16 @@ def register_tools(mcp: FastMCP) -> None:
         Args:
             strategy: Merge strategy: "squash", "merge", or "rebase".
             no_delete: Keep the branch after merging.
-            cwd: Working-directory override for this call. Defaults to
-                the MCP server's cwd. Use to operate on a non-cwd repo without
-                falling back to the `git` passthrough.
+            cwd: Repository to act on. Falls back to the session's
+                active_root; with neither, the call is refused rather than run
+                against the MCP server's own directory.
         """
-        state = attach_open_pr(build_state(cwd=cwd))
+        root = _resolve_root(cwd)
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("PlanResult | JetsamErrorResult", root_error)
+
+        state = attach_open_pr(build_state(cwd=root))
         config = load_config(state.repo_root)
         pid = generate_plan_id()
 
@@ -542,8 +674,19 @@ def register_tools(mcp: FastMCP) -> None:
 
     @mcp.tool()
     def tidy(cwd: str | None = None) -> PlanResult | JetsamErrorResult:
-        """Prune merged branches and stale refs. Returns a plan to confirm()."""
-        state = build_state(cwd=cwd)
+        """Prune merged branches and stale refs. Returns a plan to confirm().
+
+        Args:
+            cwd: Repository to act on. Falls back to the session's
+                active_root; with neither, the call is refused rather than run
+                against the MCP server's own directory.
+        """
+        root = _resolve_root(cwd)
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("PlanResult | JetsamErrorResult", root_error)
+
+        state = build_state(cwd=root)
         pid = generate_plan_id()
         plan = plan_tidy(state, plan_id=pid)
         _get_store().save(plan)
@@ -560,13 +703,18 @@ def register_tools(mcp: FastMCP) -> None:
         Args:
             state: Filter by state: open, closed, all.
             labels: Filter by labels.
-            cwd: Working-directory override for this call. Defaults to
-                the MCP server's cwd. Use to operate on a non-cwd repo without
-                falling back to the `git` passthrough.
+            cwd: Repository to act on. Falls back to the session's
+                active_root; with neither, the call is refused rather than run
+                against the MCP server's own directory.
         """
         if state not in ISSUE_STATES:
             return _invalid_argument_error("issue state filter", state, ISSUE_STATES)
-        repo_state = build_state(cwd=cwd)
+        root = _resolve_root(cwd)
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("list[dict[str, Any]] | dict[str, Any]", root_error)
+
+        repo_state = build_state(cwd=root)
         platform = _get_platform(repo_state)
         if platform is None:
             return _no_platform_error()
@@ -586,11 +734,16 @@ def register_tools(mcp: FastMCP) -> None:
             body: Comment text.
             branch: Branch to find PR for (default: current branch).
             pr_number: PR number (overrides branch resolution).
-            cwd: Working-directory override for this call. Defaults to
-                the MCP server's cwd. Use to operate on a non-cwd repo without
-                falling back to the `git` passthrough.
+            cwd: Repository to act on. Falls back to the session's
+                active_root; with neither, the call is refused rather than run
+                against the MCP server's own directory.
         """
-        repo_state = build_state(cwd=cwd)
+        root = _resolve_root(cwd)
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return root_error
+
+        repo_state = build_state(cwd=root)
         platform = _get_platform(repo_state)
         if platform is None:
             return _no_platform_error()
@@ -620,13 +773,18 @@ def register_tools(mcp: FastMCP) -> None:
             body: Review body text. Required for request-changes and comment.
             branch: Branch to find PR for (default: current branch).
             pr_number: PR number (overrides branch resolution).
-            cwd: Working-directory override for this call. Defaults to
-                the MCP server's cwd. Use to operate on a non-cwd repo without
-                falling back to the `git` passthrough.
+            cwd: Repository to act on. Falls back to the session's
+                active_root; with neither, the call is refused rather than run
+                against the MCP server's own directory.
         """
         if event not in REVIEW_EVENTS:
             return _invalid_argument_error("review event", event, REVIEW_EVENTS)
-        repo_state = build_state(cwd=cwd)
+        root = _resolve_root(cwd)
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return root_error
+
+        repo_state = build_state(cwd=root)
         platform = _get_platform(repo_state)
         if platform is None:
             return _no_platform_error()
@@ -652,11 +810,16 @@ def register_tools(mcp: FastMCP) -> None:
         Args:
             branch: Branch to find PR for (default: current branch).
             pr_number: PR number (overrides branch resolution).
-            cwd: Working-directory override for this call. Defaults to
-                the MCP server's cwd. Use to operate on a non-cwd repo without
-                falling back to the `git` passthrough.
+            cwd: Repository to act on. Falls back to the session's
+                active_root; with neither, the call is refused rather than run
+                against the MCP server's own directory.
         """
-        repo_state = build_state(cwd=cwd)
+        root = _resolve_root(cwd)
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("list[dict[str, Any]] | dict[str, Any]", root_error)
+
+        repo_state = build_state(cwd=root)
         platform = _get_platform(repo_state)
         if platform is None:
             return _no_platform_error()
@@ -685,13 +848,18 @@ def register_tools(mcp: FastMCP) -> None:
             comment: Optional comment to post before closing.
             reason: Close reason: "completed" (default) or "not-planned"
                 (also accepted as "not planned").
-            cwd: Working-directory override for this call. Defaults to
-                the MCP server's cwd. Use to operate on a non-cwd repo without
-                falling back to the `git` passthrough.
+            cwd: Repository to act on. Falls back to the session's
+                active_root; with neither, the call is refused rather than run
+                against the MCP server's own directory.
         """
         if reason not in ISSUE_CLOSE_REASONS:
             return _invalid_argument_error("close reason", reason, ISSUE_CLOSE_REASONS)
-        repo_state = build_state(cwd=cwd)
+        root = _resolve_root(cwd)
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return root_error
+
+        repo_state = build_state(cwd=root)
         platform = _get_platform(repo_state)
         if platform is None:
             return _no_platform_error()
@@ -713,11 +881,16 @@ def register_tools(mcp: FastMCP) -> None:
             title: Release title (defaults to tag name).
             notes: Release notes text.
             draft: Create as a draft release.
-            cwd: Working-directory override for this call. Defaults to
-                the MCP server's cwd. Use to operate on a non-cwd repo without
-                falling back to the `git` passthrough.
+            cwd: Repository to act on. Falls back to the session's
+                active_root; with neither, the call is refused rather than run
+                against the MCP server's own directory.
         """
-        state = build_state(cwd=cwd)
+        root = _resolve_root(cwd)
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("PlanResult | JetsamErrorResult", root_error)
+
+        state = build_state(cwd=root)
         pid = generate_plan_id()
         plan = plan_release(
             state, plan_id=pid,
@@ -754,12 +927,19 @@ def register_tools(mcp: FastMCP) -> None:
             target: Commit/ref to tag (default: HEAD).
             count: Max tags to return when listing (default: 20).
             sort: Sort field when listing (default: "-v:refname").
-            cwd: Working-directory override for this call.
+            cwd: Repository to act on. Falls back to the session's
+                active_root; with neither, the call is refused rather than run
+                against the MCP server's own directory.
         """
+        root = _resolve_root(cwd)
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("list[dict[str, Any]] | PlanResult | JetsamErrorResult", root_error)
+
         if action == "list":
             fmt = "%(refname:short)|%(objectname:short)|%(creatordate:iso-strict)|%(subject)"
             args = ["tag", "-l", f"--sort={sort}", f"--format={fmt}"]
-            result = run_git_sync(args, cwd=cwd)
+            result = run_git_sync(args, cwd=root)
             if not result.ok:
                 return cast(
                     "JetsamErrorResult",
@@ -784,7 +964,7 @@ def register_tools(mcp: FastMCP) -> None:
                 ).to_dict(),
             )
 
-        state = build_state(cwd=cwd)
+        state = build_state(cwd=root)
         pid = generate_plan_id()
         try:
             plan = plan_tag(
@@ -891,13 +1071,21 @@ def register_tools(mcp: FastMCP) -> None:
         return {"ok": True, "id": id}
 
     @mcp.tool()
-    def git(args: list[str]) -> GitResult:
+    def git(args: list[str], cwd: str | None = None) -> GitResult | JetsamErrorResult:
         """Run any git command (pass-through).
 
         Args:
             args: Git arguments, e.g. ["rebase", "-i", "HEAD~3"].
+            cwd: Repository to act on. Falls back to the session's active_root;
+                with neither, the call is refused. Callers used to prepend
+                ["-C", "<repo>"] by hand because this argument did not exist.
         """
-        result = run_git_sync(args)
+        root = _resolve_root(cwd)
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("JetsamErrorResult", root_error)
+
+        result = run_git_sync(args, cwd=root)
         return {
             "ok": result.ok,
             "stdout": result.stdout,

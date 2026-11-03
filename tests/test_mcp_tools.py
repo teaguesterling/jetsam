@@ -296,7 +296,7 @@ class TestErrorFormats:
         mcp_tools.register_tools(mcp)
 
         log_fn = mcp._tool_manager._tools["log"].fn
-        result = log_fn(n=10, branch="nonexistent-branch-xyz")
+        result = log_fn(n=10, branch="nonexistent-branch-xyz", cwd=str(tmp_git_repo))
 
         assert isinstance(result, dict), "Error should be a dict, not a list"
         assert result["error"] == "git_error"
@@ -316,7 +316,10 @@ class TestErrorFormats:
         mcp_tools.register_tools(mcp)
 
         diff_fn = mcp._tool_manager._tools["diff"].fn
-        result = diff_fn(target="nonexistent-ref-xyz", stat=True, staged=False)
+        result = diff_fn(
+            target="nonexistent-ref-xyz", stat=True, staged=False,
+            cwd=str(tmp_git_repo),
+        )
 
         assert isinstance(result, dict)
         assert result["error"] == "git_error"
@@ -336,7 +339,10 @@ class TestErrorFormats:
         mcp_tools.register_tools(mcp)
 
         diff_fn = mcp._tool_manager._tools["diff"].fn
-        result = diff_fn(target="nonexistent-ref-xyz", stat=False, staged=False)
+        result = diff_fn(
+            target="nonexistent-ref-xyz", stat=False, staged=False,
+            cwd=str(tmp_git_repo),
+        )
 
         assert isinstance(result, dict)
         assert result["error"] == "git_error"
@@ -355,7 +361,7 @@ class TestErrorFormats:
         mcp_tools.register_tools(mcp)
 
         pr_view_fn = mcp._tool_manager._tools["pr_view"].fn
-        result = pr_view_fn(branch=None)
+        result = pr_view_fn(branch=None, cwd=str(tmp_git_repo))
 
         assert isinstance(result, dict)
         assert result["error"] == "no_platform"
@@ -373,7 +379,7 @@ class TestErrorFormats:
         mcp_tools.register_tools(mcp)
 
         pr_list_fn = mcp._tool_manager._tools["pr_list"].fn
-        result = pr_list_fn(state="open", author=None)
+        result = pr_list_fn(state="open", author=None, cwd=str(tmp_git_repo))
 
         assert isinstance(result, dict), "Error should be a dict, not a list"
         assert result["error"] == "no_platform"
@@ -391,7 +397,7 @@ class TestErrorFormats:
         mcp_tools.register_tools(mcp)
 
         checks_fn = mcp._tool_manager._tools["checks"].fn
-        result = checks_fn(pr_number=None)
+        result = checks_fn(pr_number=None, cwd=str(tmp_git_repo))
 
         assert isinstance(result, dict), "Error should be a dict, not a list"
         assert result["error"] == "no_platform"
@@ -408,7 +414,7 @@ class TestErrorFormats:
         mcp_tools.register_tools(mcp)
 
         issues_fn = mcp._tool_manager._tools["issues"].fn
-        result = issues_fn(state="open", labels=None)
+        result = issues_fn(state="open", labels=None, cwd=str(tmp_git_repo))
 
         assert isinstance(result, dict), "Error should be a dict, not a list"
         assert result["error"] == "no_platform"
@@ -425,7 +431,7 @@ class TestErrorFormats:
         mcp_tools.register_tools(mcp)
 
         fn = mcp._tool_manager._tools["pr_comments"].fn
-        result = fn(branch=None, pr_number=None)
+        result = fn(branch=None, pr_number=None, cwd=str(tmp_git_repo))
 
         assert isinstance(result, dict), "Error should be a dict, not a list"
         assert result["error"] == "no_platform"
@@ -442,7 +448,7 @@ class TestErrorFormats:
         mcp_tools.register_tools(mcp)
 
         fn = mcp._tool_manager._tools["pr_comment"].fn
-        result = fn(body="test", branch=None, pr_number=None)
+        result = fn(body="test", branch=None, pr_number=None, cwd=str(tmp_git_repo))
 
         assert isinstance(result, dict)
         assert result["error"] == "no_platform"
@@ -459,7 +465,7 @@ class TestErrorFormats:
         mcp_tools.register_tools(mcp)
 
         fn = mcp._tool_manager._tools["pr_review"].fn
-        result = fn(event="approve", body="", branch=None, pr_number=None)
+        result = fn(event="approve", body="", branch=None, pr_number=None, cwd=str(tmp_git_repo))
 
         assert isinstance(result, dict)
         assert result["error"] == "no_platform"
@@ -476,7 +482,7 @@ class TestErrorFormats:
         mcp_tools.register_tools(mcp)
 
         fn = mcp._tool_manager._tools["issue_close"].fn
-        result = fn(number=999, comment=None, reason="completed")
+        result = fn(number=999, comment=None, reason="completed", cwd=str(tmp_git_repo))
 
         assert isinstance(result, dict)
         assert result["error"] == "no_platform"
@@ -501,7 +507,7 @@ class TestErrorFormats:
         mcp_tools.register_tools(mcp)
 
         checks_fn = mcp._tool_manager._tools["checks"].fn
-        result = checks_fn(pr_number=None)
+        result = checks_fn(pr_number=None, cwd=str(tmp_git_repo))
 
         assert isinstance(result, dict), "Error should be a dict, not a list"
         assert result["error"] == "no_pr"
@@ -545,7 +551,7 @@ class TestTagTool:
         mcp_tools.register_tools(mcp)
 
         tag_fn = mcp._tool_manager._tools["tag"].fn
-        result = tag_fn(action="list")
+        result = tag_fn(action="list", cwd=str(tmp_git_repo))
 
         assert isinstance(result, list)
         assert any(t["name"] == "v1.0.0" for t in result)
@@ -559,7 +565,7 @@ class TestTagTool:
         mcp_tools.register_tools(mcp)
 
         tag_fn = mcp._tool_manager._tools["tag"].fn
-        plan = tag_fn(action="create", name="v1.1.0", message="new tag")
+        plan = tag_fn(action="create", name="v1.1.0", message="new tag", cwd=str(tmp_git_repo))
 
         assert isinstance(plan, dict)
         assert plan["verb"] == "tag"

@@ -1,5 +1,66 @@
 # Changelog
 
+## Unreleased
+
+### Changed (breaking) — every workspace tool names its repository, or is refused
+
+The MCP tools resolved their repository from the server's own process cwd when
+`cwd=` was omitted. That directory is a real repository often enough that the
+answer looked right, so a wrong-repo answer was indistinguishable from a
+correct one.
+
+Measured 2026-11-03 against `origin/main`, from a server whose cwd was
+`~/.dotfiles/duckeye`, with `active_root` set to `~/Projects/jetsam`:
+
+| tool | answered for | correct? |
+|---|---|---|
+| `status()` | `.../Projects/jetsam`, head `c32ca60` | yes |
+| `log(n=2)` | duckeye's `4300dee`, `ca0b836` | no |
+| `diff()` | `files_changed: 0` (jetsam had two unstaged) | no |
+
+`log` and `diff` accept `cwd` but passed it straight to `run_git_sync`, so only
+`build_state` applied the documented `cwd` → `active_root` order. Two verbs
+disagreed about which repository the session was about.
+
+The resolution order is now the same everywhere, and has no third step:
+
+1. the `cwd=` argument,
+2. the session's `active_root`,
+3. otherwise the call returns `{"error": "no_root", ...}`.
+
+**This breaks bare calls.** A tool invoked with no `cwd` from a session that
+has not set `active_root` now returns `no_root` instead of answering about the
+server's directory. Pass `cwd=`, or set the root once with
+`config(set={"active_root": "/path/to/repo"})`, or seed `JETSAM_ACTIVE_ROOT` in
+the launch environment.
+
+Argument validation still runs first, so an invalid `state`, `strategy`,
+`event` or `reason` is still rejected by the allowlists from #19 and still
+reports `invalid_argument` — the root check never masks them.
+
+Exempt, because they touch no workspace: `show_plan`, `modify_plan`, `confirm`,
+`cancel` and `config`. The plan store has been a fixed per-user directory since
+#17, and `confirm` executes with the repo root recorded in the plan.
+
+### Added — a root that is not a directory is reported as that
+
+`run_git_sync` catches `FileNotFoundError` and reports `git: command not found`
+with returncode 127. That handler cannot tell a missing `git` from a missing
+`cwd`, so a bad root sent the reader after the wrong cause.
+
+This matters most through the launch environment. An `.mcp.json` env value that
+does not expand arrives in `active_root` verbatim, so `JETSAM_ACTIVE_ROOT` set
+to `${CLAUDE_PROJECT_DIR}` on a host that does not expand it would have made
+every call report a missing git binary. Such a root now returns
+`{"error": "bad_root", ...}`, naming the path and whether it came from `cwd=`
+or from `active_root`.
+
+### Added — `git` passthrough takes `cwd`
+
+`git(args)` had no `cwd` parameter, so every call had to begin
+`["-C", "<repo path>", ...]` by hand or run against the server's directory. It
+now takes `cwd` with the same contract as the other verbs.
+
 ## v1.2.1
 
 ### Fixed — the 1.2.0 TypedDicts broke Python 3.10 and 3.11

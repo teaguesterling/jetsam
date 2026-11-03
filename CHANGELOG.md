@@ -42,6 +42,19 @@ Exempt, because they touch no workspace: `show_plan`, `modify_plan`, `confirm`,
 `cancel` and `config`. The plan store has been a fixed per-user directory since
 #17, and `confirm` executes with the repo root recorded in the plan.
 
+### Added — a root that is not a directory is reported as that
+
+`run_git_sync` catches `FileNotFoundError` and reports `git: command not found`
+with returncode 127. That handler cannot tell a missing `git` from a missing
+`cwd`, so a bad root sent the reader after the wrong cause.
+
+This matters most through the launch environment. An `.mcp.json` env value that
+does not expand arrives in `active_root` verbatim, so `JETSAM_ACTIVE_ROOT` set
+to `${CLAUDE_PROJECT_DIR}` on a host that does not expand it would have made
+every call report a missing git binary. Such a root now returns
+`{"error": "bad_root", ...}`, naming the path and whether it came from `cwd=`
+or from `active_root`.
+
 ### Added — `git` passthrough takes `cwd`
 
 `git(args)` had no `cwd` parameter, so every call had to begin

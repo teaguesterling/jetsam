@@ -169,3 +169,34 @@ class TestExplicitCwdWins:
         update_runtime({"active_root": str(repo_a)})
         entries = tool("log")(n=1, cwd=str(repo_b))
         assert entries[0]["message"] == "commit-in-b"
+
+
+class TestBadRootSaysSo:
+    """A named root that is not a directory must be reported as that.
+
+    This is the launch-environment path: an `.mcp.json` env value that does
+    not expand arrives in active_root verbatim.  `run_git_sync` catches
+    FileNotFoundError and reports "git: command not found" with returncode
+    127, which sends the reader after the wrong cause entirely.
+    """
+
+    def test_active_root_that_is_not_a_directory(self, tool, two_repos):
+        update_runtime({"active_root": "${CLAUDE_PROJECT_DIR}"})
+        result = tool("status")()
+        assert result.get("error") == "bad_root", result
+        assert "${CLAUDE_PROJECT_DIR}" in result["message"], result
+        assert "active_root" in result["message"], result
+
+    def test_cwd_that_is_not_a_directory_blames_cwd(self, tool, two_repos):
+        repo_a, _ = two_repos
+        update_runtime({"active_root": str(repo_a)})
+        result = tool("log")(n=1, cwd=str(repo_a / "no-such-dir"))
+        assert result.get("error") == "bad_root", result
+        assert "cwd=" in result["message"], result
+
+    def test_a_file_is_not_a_root(self, tool, two_repos):
+        repo_a, _ = two_repos
+        a_file = repo_a / "README.md"
+        a_file.write_text("# not a directory\n")
+        result = tool("diff")(cwd=str(a_file))
+        assert result.get("error") == "bad_root", result

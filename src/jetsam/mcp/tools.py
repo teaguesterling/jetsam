@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any, cast
@@ -149,6 +150,33 @@ def _resolve_root(cwd: str | None) -> str | None:
     return get_runtime().active_root
 
 
+def _root_error(root: str | None, cwd: str | None) -> dict[str, Any] | None:
+    """Return the error for an unusable root, or None when it is usable.
+
+    Two distinct failures, because the fix differs. Nothing was named, or
+    what was named is not a directory. The second is reachable through the
+    launch environment: an `.mcp.json` env value that does not expand lands
+    in active_root verbatim, and `run_git_sync` would then report it as
+    "git: command not found" (returncode 127), because its FileNotFoundError
+    handler cannot tell a missing git from a missing cwd.
+    """
+    if root is None:
+        return _no_root_error()
+    if not os.path.isdir(root):
+        source = "the cwd= argument" if cwd else "the session's active_root"
+        return JetsamError(
+            error="bad_root",
+            message=f"{root!r}, from {source}, is not a directory.",
+            suggested_action=(
+                "Check the path. An unexpanded placeholder such as "
+                '"${CLAUDE_PROJECT_DIR}" in a JETSAM_ACTIVE_ROOT env value '
+                "arrives here verbatim."
+            ),
+            recoverable=True,
+        ).to_dict()
+    return None
+
+
 def _no_root_error() -> dict[str, Any]:
     """Standard error for a call that named no repository."""
     return JetsamError(
@@ -218,8 +246,9 @@ def register_tools(mcp: FastMCP) -> None:
                 against the MCP server's own directory.
         """
         root = _resolve_root(cwd)
-        if root is None:
-            return _no_root_error()
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return root_error
 
         state = build_state(cwd=root)
         return state.to_dict()
@@ -246,8 +275,9 @@ def register_tools(mcp: FastMCP) -> None:
                 against the MCP server's own directory.
         """
         root = _resolve_root(cwd)
-        if root is None:
-            return cast("PlanResult | JetsamErrorResult", _no_root_error())
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("PlanResult | JetsamErrorResult", root_error)
 
         state = build_state(cwd=root)
         config = load_config(state.repo_root)
@@ -284,8 +314,9 @@ def register_tools(mcp: FastMCP) -> None:
                 _invalid_argument_error("sync strategy", strategy, SYNC_STRATEGIES),
             )
         root = _resolve_root(cwd)
-        if root is None:
-            return cast("PlanResult | JetsamErrorResult", _no_root_error())
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("PlanResult | JetsamErrorResult", root_error)
 
         state = build_state(cwd=root)
         pid = generate_plan_id()
@@ -333,8 +364,9 @@ def register_tools(mcp: FastMCP) -> None:
                 against the MCP server's own directory.
         """
         root = _resolve_root(cwd)
-        if root is None:
-            return cast("PlanResult | JetsamErrorResult", _no_root_error())
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("PlanResult | JetsamErrorResult", root_error)
 
         state = build_state(cwd=root)
         config = load_config(state.repo_root)
@@ -363,8 +395,9 @@ def register_tools(mcp: FastMCP) -> None:
                 against the MCP server's own directory.
         """
         root = _resolve_root(cwd)
-        if root is None:
-            return cast("list[dict[str, Any]] | dict[str, Any]", _no_root_error())
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("list[dict[str, Any]] | dict[str, Any]", root_error)
 
         fmt = "%H%x00%h%x00%an%x00%aI%x00%s"
         args = ["log", f"--format={fmt}", f"-{n}"]
@@ -400,8 +433,9 @@ def register_tools(mcp: FastMCP) -> None:
                 against the MCP server's own directory.
         """
         root = _resolve_root(cwd)
-        if root is None:
-            return _no_root_error()
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return root_error
 
         if stat:
             args = ["diff", "--numstat"]
@@ -450,8 +484,9 @@ def register_tools(mcp: FastMCP) -> None:
                 against the MCP server's own directory.
         """
         root = _resolve_root(cwd)
-        if root is None:
-            return cast("PlanResult | JetsamErrorResult", _no_root_error())
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("PlanResult | JetsamErrorResult", root_error)
 
         state = build_state(cwd=root)
         pid = generate_plan_id()
@@ -470,8 +505,9 @@ def register_tools(mcp: FastMCP) -> None:
                 against the MCP server's own directory.
         """
         root = _resolve_root(cwd)
-        if root is None:
-            return _no_root_error()
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return root_error
 
         state = build_state(cwd=root)
         actual_branch = branch or state.branch
@@ -501,8 +537,9 @@ def register_tools(mcp: FastMCP) -> None:
         if state not in PR_STATES:
             return _invalid_argument_error("PR state filter", state, PR_STATES)
         root = _resolve_root(cwd)
-        if root is None:
-            return cast("list[dict[str, Any]] | dict[str, Any]", _no_root_error())
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("list[dict[str, Any]] | dict[str, Any]", root_error)
 
         repo_state = build_state(cwd=root)
         platform = _get_platform(repo_state)
@@ -524,8 +561,9 @@ def register_tools(mcp: FastMCP) -> None:
                 against the MCP server's own directory.
         """
         root = _resolve_root(cwd)
-        if root is None:
-            return cast("list[dict[str, Any]] | dict[str, Any]", _no_root_error())
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("list[dict[str, Any]] | dict[str, Any]", root_error)
 
         repo_state = build_state(cwd=root)
         platform = _get_platform(repo_state)
@@ -562,8 +600,9 @@ def register_tools(mcp: FastMCP) -> None:
                 against the MCP server's own directory.
         """
         root = _resolve_root(cwd)
-        if root is None:
-            return cast("PlanResult | JetsamErrorResult", _no_root_error())
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("PlanResult | JetsamErrorResult", root_error)
 
         state = build_state(cwd=root)
         config = load_config(state.repo_root)
@@ -603,8 +642,9 @@ def register_tools(mcp: FastMCP) -> None:
                 against the MCP server's own directory.
         """
         root = _resolve_root(cwd)
-        if root is None:
-            return cast("PlanResult | JetsamErrorResult", _no_root_error())
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("PlanResult | JetsamErrorResult", root_error)
 
         state = attach_open_pr(build_state(cwd=root))
         config = load_config(state.repo_root)
@@ -642,8 +682,9 @@ def register_tools(mcp: FastMCP) -> None:
                 against the MCP server's own directory.
         """
         root = _resolve_root(cwd)
-        if root is None:
-            return cast("PlanResult | JetsamErrorResult", _no_root_error())
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("PlanResult | JetsamErrorResult", root_error)
 
         state = build_state(cwd=root)
         pid = generate_plan_id()
@@ -669,8 +710,9 @@ def register_tools(mcp: FastMCP) -> None:
         if state not in ISSUE_STATES:
             return _invalid_argument_error("issue state filter", state, ISSUE_STATES)
         root = _resolve_root(cwd)
-        if root is None:
-            return cast("list[dict[str, Any]] | dict[str, Any]", _no_root_error())
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("list[dict[str, Any]] | dict[str, Any]", root_error)
 
         repo_state = build_state(cwd=root)
         platform = _get_platform(repo_state)
@@ -697,8 +739,9 @@ def register_tools(mcp: FastMCP) -> None:
                 against the MCP server's own directory.
         """
         root = _resolve_root(cwd)
-        if root is None:
-            return _no_root_error()
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return root_error
 
         repo_state = build_state(cwd=root)
         platform = _get_platform(repo_state)
@@ -737,8 +780,9 @@ def register_tools(mcp: FastMCP) -> None:
         if event not in REVIEW_EVENTS:
             return _invalid_argument_error("review event", event, REVIEW_EVENTS)
         root = _resolve_root(cwd)
-        if root is None:
-            return _no_root_error()
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return root_error
 
         repo_state = build_state(cwd=root)
         platform = _get_platform(repo_state)
@@ -771,8 +815,9 @@ def register_tools(mcp: FastMCP) -> None:
                 against the MCP server's own directory.
         """
         root = _resolve_root(cwd)
-        if root is None:
-            return cast("list[dict[str, Any]] | dict[str, Any]", _no_root_error())
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("list[dict[str, Any]] | dict[str, Any]", root_error)
 
         repo_state = build_state(cwd=root)
         platform = _get_platform(repo_state)
@@ -810,8 +855,9 @@ def register_tools(mcp: FastMCP) -> None:
         if reason not in ISSUE_CLOSE_REASONS:
             return _invalid_argument_error("close reason", reason, ISSUE_CLOSE_REASONS)
         root = _resolve_root(cwd)
-        if root is None:
-            return _no_root_error()
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return root_error
 
         repo_state = build_state(cwd=root)
         platform = _get_platform(repo_state)
@@ -840,8 +886,9 @@ def register_tools(mcp: FastMCP) -> None:
                 against the MCP server's own directory.
         """
         root = _resolve_root(cwd)
-        if root is None:
-            return cast("PlanResult | JetsamErrorResult", _no_root_error())
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("PlanResult | JetsamErrorResult", root_error)
 
         state = build_state(cwd=root)
         pid = generate_plan_id()
@@ -885,8 +932,9 @@ def register_tools(mcp: FastMCP) -> None:
                 against the MCP server's own directory.
         """
         root = _resolve_root(cwd)
-        if root is None:
-            return cast("list[dict[str, Any]] | PlanResult | JetsamErrorResult", _no_root_error())
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("list[dict[str, Any]] | PlanResult | JetsamErrorResult", root_error)
 
         if action == "list":
             fmt = "%(refname:short)|%(objectname:short)|%(creatordate:iso-strict)|%(subject)"
@@ -1023,7 +1071,7 @@ def register_tools(mcp: FastMCP) -> None:
         return {"ok": True, "id": id}
 
     @mcp.tool()
-    def git(args: list[str], cwd: str | None = None) -> GitResult | dict[str, Any]:
+    def git(args: list[str], cwd: str | None = None) -> GitResult | JetsamErrorResult:
         """Run any git command (pass-through).
 
         Args:
@@ -1033,8 +1081,9 @@ def register_tools(mcp: FastMCP) -> None:
                 ["-C", "<repo>"] by hand because this argument did not exist.
         """
         root = _resolve_root(cwd)
-        if root is None:
-            return _no_root_error()
+        root_error = _root_error(root, cwd)
+        if root_error is not None:
+            return cast("JetsamErrorResult", root_error)
 
         result = run_git_sync(args, cwd=root)
         return {

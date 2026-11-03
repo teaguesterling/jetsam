@@ -188,7 +188,9 @@ def test_mcp_finish_invalid_strategy_returns_error_dict(
 ) -> None:
     monkeypatch.setenv("GIT_DIR", str(tmp_git_repo / ".git"))
     monkeypatch.setenv("GIT_WORK_TREE", str(tmp_git_repo))
-    _assert_invalid_argument(_mcp_tool("finish")(strategy="admin"))
+    _assert_invalid_argument(
+        _mcp_tool("finish")(strategy="admin", cwd=str(tmp_git_repo))
+    )
 
 
 # --------------------------------------------------------------------------- #

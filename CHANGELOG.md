@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.0.0
 
 ### Changed (breaking) — every workspace tool names its repository, or is refused
 
@@ -60,6 +60,26 @@ or from `active_root`.
 `git(args)` had no `cwd` parameter, so every call had to begin
 `["-C", "<repo path>", ...]` by hand or run against the server's directory. It
 now takes `cwd` with the same contract as the other verbs.
+
+### Added — a `tag` verb (#26)
+
+Tags needed the `git` passthrough, so a tag operation carried no plan and no
+confirmation step. `jetsam tag` now covers four actions: `list`, `create`,
+`delete` and `push`.
+
+`list` returns the entries directly: name, short sha, ISO date and subject. The
+other three actions return a plan, and `confirm()` executes it. An annotated tag
+is the default, and `--no-annotate` makes a lightweight tag. `--target` tags a
+commit other than `HEAD`. The MCP tool is `tag(action=...)`, with the same four
+actions.
+
+### Added — `sync` and `ship` can force push (#27)
+
+A force push needed the `git` passthrough too. `sync` and `ship` now take
+`--force-with-lease` and `--force`, on the CLI and through MCP.
+
+The plan carries a warning for each flag. It carries a third warning when the
+branch is the default branch. Read the plan before you confirm it.
 
 ## v1.2.1
 

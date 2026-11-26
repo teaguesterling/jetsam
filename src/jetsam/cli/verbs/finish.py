@@ -17,6 +17,9 @@ from jetsam.platforms.base import MERGE_STRATEGIES
 @click.option("--no-delete", is_flag=True, help="Keep the branch after merging")
 @click.option("--dry-run", is_flag=True, help="Show plan without executing")
 @click.option("--execute", "auto_execute", is_flag=True, help="Execute without prompting")
+@click.option("--repoint-alternates", is_flag=True,
+              help="Repoint submodule alternates that borrow from a removed worktree "
+                   "to the primary store, instead of refusing")
 @click.pass_context
 def finish(
     ctx: click.Context,
@@ -24,6 +27,7 @@ def finish(
     no_delete: bool,
     dry_run: bool,
     auto_execute: bool,
+    repoint_alternates: bool,
 ) -> None:
     """Merge PR and clean up the current branch.
 
@@ -46,6 +50,7 @@ def finish(
         no_delete=no_delete or None,
         worktree_path=worktree_path,
         config=config,
+        repoint_alternates=repoint_alternates,
     )
 
     json_mode = ctx.obj.get("json")
@@ -126,4 +131,14 @@ def _show_plan_human(plan: Plan) -> None:
             click.echo(f"  Delete: branch {step.params.get('branch', '')}")
         elif step.action == "worktree_remove":
             click.echo(f"  Remove: worktree {step.params.get('path', '')}")
+        elif step.action == "alternates_refuse":
+            click.echo("  Refuse: other worktrees borrow submodule objects from "
+                       f"{step.params.get('path') or step.params.get('admin_dir')}:")
+            for f in step.params.get("files", []):
+                click.echo(f"    {f}")
+            click.echo("    (re-run with --repoint-alternates to repoint them first)")
+        elif step.action == "alternates_repoint":
+            click.echo("  Repoint: submodule alternates to the primary store:")
+            for f in step.params.get("files", []):
+                click.echo(f"    {f}")
     click.echo()

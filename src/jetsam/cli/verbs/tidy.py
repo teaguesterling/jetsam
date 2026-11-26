@@ -12,11 +12,15 @@ from jetsam.core.state import build_state
 @click.command()
 @click.option("--dry-run", is_flag=True, help="Show plan without executing")
 @click.option("--execute", "auto_execute", is_flag=True, help="Execute without prompting")
+@click.option("--repoint-alternates", is_flag=True,
+              help="Repoint submodule alternates that borrow from a removed worktree "
+                   "to the primary store, instead of refusing")
 @click.pass_context
 def tidy(
     ctx: click.Context,
     dry_run: bool,
     auto_execute: bool,
+    repoint_alternates: bool,
 ) -> None:
     """Clean up merged branches and stale remote refs.
 
@@ -27,7 +31,7 @@ def tidy(
     state = build_state()
     plan_id = generate_plan_id()
 
-    plan = plan_tidy(state, plan_id=plan_id)
+    plan = plan_tidy(state, plan_id=plan_id, repoint_alternates=repoint_alternates)
 
     json_mode = ctx.obj.get("json")
 
@@ -91,4 +95,14 @@ def _show_plan_human(plan: Plan) -> None:
             click.echo("  Prune: local branches with gone upstream")
         elif step.action == "worktree_prune":
             click.echo("  Prune: stale worktree refs")
+        elif step.action == "alternates_refuse":
+            click.echo("  Refuse: other worktrees borrow submodule objects from "
+                       f"{step.params.get('path') or step.params.get('admin_dir')}:")
+            for f in step.params.get("files", []):
+                click.echo(f"    {f}")
+            click.echo("    (re-run with --repoint-alternates to repoint them first)")
+        elif step.action == "alternates_repoint":
+            click.echo("  Repoint: submodule alternates to the primary store:")
+            for f in step.params.get("files", []):
+                click.echo(f"    {f}")
     click.echo()

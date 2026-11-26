@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Added — `tidy` and `finish` refuse to delete a lender submodule store
+
+`git worktree prune` deletes `<common>/worktrees/<name>/` for a worktree whose
+folder is gone, and with it any submodule store that other worktrees borrow
+from through `objects/info/alternates`. Measured on v2.0.0 (git 2.43): `tidy`
+ran its `worktree_prune` step with status `ok`, and the borrower then failed
+`git fsck` with `unable to normalize alternate object path`. Two live trees in
+another repo broke this way on 2026-11-26.
+
+`tidy` and `finish` plans now start with an `alternates_refuse` step, and name
+each borrowing file in `warnings`, when a worktree they delete is a lender.
+`repoint_alternates=True` (CLI `--repoint-alternates`) plans an
+`alternates_repoint` step instead: it points the borrowers at the primary store,
+checks them with `fsck --connectivity-only`, and restores the files on failure.
+`worktree_prune` also re-checks at execution, for the plan TTL.
+
 ## v2.0.0
 
 ### Changed (breaking) — every workspace tool names its repository, or is refused

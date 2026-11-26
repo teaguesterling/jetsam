@@ -630,6 +630,7 @@ def register_tools(mcp: FastMCP) -> None:
     def finish(
         strategy: str | None = None,
         no_delete: bool | None = None,
+        repoint_alternates: bool = False,
         cwd: str | None = None,
     ) -> PlanResult | JetsamErrorResult:
         """Merge PR and clean up branch. Returns a plan to confirm().
@@ -637,6 +638,10 @@ def register_tools(mcp: FastMCP) -> None:
         Args:
             strategy: Merge strategy: "squash", "merge", or "rebase".
             no_delete: Keep the branch after merging.
+            repoint_alternates: If other worktrees' submodules borrow objects
+                (objects/info/alternates) from a worktree this plan deletes,
+                repoint them to the primary store first. Without it, the plan
+                refuses in its first step and names each file.
             cwd: Repository to act on. Falls back to the session's
                 active_root; with neither, the call is refused rather than run
                 against the MCP server's own directory.
@@ -660,6 +665,7 @@ def register_tools(mcp: FastMCP) -> None:
                 strategy=strategy, no_delete=no_delete,
                 worktree_path=worktree_path,
                 config=config,
+                repoint_alternates=repoint_alternates,
             )
         except ValueError as e:
             # plan_finish allowlists the merge strategy (explicit param or a
@@ -673,10 +679,17 @@ def register_tools(mcp: FastMCP) -> None:
         return cast("PlanResult | JetsamErrorResult", plan.to_dict())
 
     @mcp.tool()
-    def tidy(cwd: str | None = None) -> PlanResult | JetsamErrorResult:
+    def tidy(
+        repoint_alternates: bool = False,
+        cwd: str | None = None,
+    ) -> PlanResult | JetsamErrorResult:
         """Prune merged branches and stale refs. Returns a plan to confirm().
 
         Args:
+            repoint_alternates: If other worktrees' submodules borrow objects
+                (objects/info/alternates) from a worktree this plan deletes,
+                repoint them to the primary store first. Without it, the plan
+                refuses in its first step and names each file.
             cwd: Repository to act on. Falls back to the session's
                 active_root; with neither, the call is refused rather than run
                 against the MCP server's own directory.
@@ -688,7 +701,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         state = build_state(cwd=root)
         pid = generate_plan_id()
-        plan = plan_tidy(state, plan_id=pid)
+        plan = plan_tidy(state, plan_id=pid, repoint_alternates=repoint_alternates)
         _get_store().save(plan)
         return cast("PlanResult | JetsamErrorResult", plan.to_dict())
 

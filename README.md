@@ -159,6 +159,31 @@ node_modules
 
 Lines starting with `#` are ignored.
 
+### Submodule alternates guard
+
+The rule: before you delete a worktree's git dir, make sure that no other worktree borrows objects from it.
+
+A submodule store in one worktree can borrow objects from the submodule store of another worktree.
+The link is a line in `objects/info/alternates`, for example after `git submodule update --reference <other tree>`.
+The lending store is in `<common git dir>/worktrees/<name>/modules/`.
+`git worktree prune` deletes that directory for a worktree whose folder is gone.
+The borrowing submodule then fails with `unable to normalize alternate object path`.
+
+`tidy` and `finish` read every `objects/info/alternates` file under the common git dir when they make the plan.
+If a line in another worktree's file points into a worktree that the plan deletes, the first step of the plan refuses.
+The plan warnings name each file, so you see them before `confirm()`.
+
+To continue, pass `repoint_alternates=True` (CLI: `--repoint-alternates`). The first step then:
+1. Replaces each line with the same path under the common git dir (the primary store).
+2. Runs `git fsck --connectivity-only` on each borrowing store.
+3. If a check fails, restores every changed file, and the plan stops.
+
+`finish` removes a worktree with `git worktree remove` and no `--force`. Git refuses that for any worktree with submodules (git 2.43), so `finish` cannot break a borrower today. The check is there in case that changes.
+
+Not covered: plain `git worktree remove` and `git worktree prune`, run without jetsam.
+Submodule git dirs inside a working tree (not absorbed into the common git dir) are not read.
+git-wt has the same guard (its README, "Submodule alternates guard").
+
 ## Configuration
 
 Jetsam stores its configuration in `.jetsam/` at the repo root:

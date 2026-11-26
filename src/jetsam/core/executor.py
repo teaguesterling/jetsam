@@ -449,7 +449,70 @@ def _exec_prune_merged_branches(step: PlanStep, cwd: str | None) -> StepResult:
     )
 
 
+def _alternates_hits(step: PlanStep, cwd: str | None) -> tuple[str | None, list[tuple[str, str]]]:
+    from jetsam.worktree.integration import common_git_dir, find_alternates_into
+
+    common = common_git_dir(cwd)
+    if common is None:
+        return None, []
+    return common, find_alternates_into(
+        step.params.get("admin_dir", ""), step.params.get("path"), common,
+    )
+
+
+def _exec_alternates_refuse(step: PlanStep, cwd: str | None) -> StepResult:
+    """Always fails: the plan was built to refuse. Names the files found now
+    (or at plan time, if they are gone since)."""
+    _, hits = _alternates_hits(step, cwd)
+    files = sorted({f for f, _ in hits}) or step.params.get("files", [])
+    label = step.params.get("path") or step.params.get("admin_dir")
+    return StepResult(
+        step="alternates_refuse", ok=False,
+        error=(
+            f"Other worktrees borrow submodule objects from {label}. "
+            f"These alternates files point into it: {', '.join(files)}. "
+            "Re-run with repoint_alternates=True to point them at the primary store first."
+        ),
+        details={"files": files},
+    )
+
+
+def _exec_alternates_repoint(step: PlanStep, cwd: str | None) -> StepResult:
+    from jetsam.worktree.integration import repoint_alternates
+
+    common, hits = _alternates_hits(step, cwd)
+    if common is None:
+        return StepResult(step="alternates_repoint", ok=False,
+                          error="could not find the common git dir")
+    if hits:
+        error = repoint_alternates(
+            step.params.get("admin_dir", ""), step.params.get("path"), common, hits,
+        )
+        if error:
+            return StepResult(step="alternates_repoint", ok=False, error=error)
+    files = sorted({f for f, _ in hits})
+    return StepResult(step="alternates_repoint", ok=True, details={"repointed": files})
+
+
 def _exec_worktree_prune(step: PlanStep, cwd: str | None) -> StepResult:
+    # Backstop for the plan TTL: refuse if a borrow appeared since planning.
+    from jetsam.worktree.integration import (
+        common_git_dir,
+        find_alternates_into,
+        stale_worktree_admin_dirs,
+    )
+
+    common = common_git_dir(cwd)
+    if common:
+        for admin_dir, path in stale_worktree_admin_dirs(common):
+            hits = find_alternates_into(admin_dir, path, common)
+            if hits:
+                files = ", ".join(sorted({f for f, _ in hits}))
+                return StepResult(
+                    step="worktree_prune", ok=False,
+                    error=f"Other worktrees borrow submodule objects from {path or admin_dir}: "
+                          f"{files}. Re-plan tidy.",
+                )
     result = run_git_sync(["worktree", "prune"], cwd=cwd)
     if result.ok:
         return StepResult(step="worktree_prune", ok=True)
@@ -541,6 +604,8 @@ _STEP_EXECUTORS: dict[str, Callable[..., StepResult]] = {
     "remote_prune": _exec_remote_prune,
     "prune_merged_branches": _exec_prune_merged_branches,
     "worktree_prune": _exec_worktree_prune,
+    "alternates_refuse": _exec_alternates_refuse,
+    "alternates_repoint": _exec_alternates_repoint,
     "tag_create": _exec_tag_create,
     "tag_delete": _exec_tag_delete,
     "push_tag": _exec_push_tag,

@@ -613,6 +613,47 @@ def plan_start(
     )
 
 
+def _alternates_guard_steps(
+    common: str,
+    targets: list[tuple[str, str | None]],
+    repoint: bool,
+) -> tuple[list[PlanStep], list[str]]:
+    """Plan steps that refuse (or repoint) before a worktree's git dir is deleted.
+
+    ``targets`` are (admin dir, worktree folder) pairs about to be removed or
+    pruned. For each one that another worktree's submodule store borrows
+    objects from (objects/info/alternates), return a first step that refuses,
+    or with ``repoint`` one that repoints to the primary store, plus warnings
+    that name each file so the caller sees them before confirm().
+    """
+    from jetsam.worktree.integration import find_alternates_into
+
+    steps: list[PlanStep] = []
+    warnings: list[str] = []
+    for admin_dir, path in targets:
+        hits = find_alternates_into(admin_dir, path, common)
+        if not hits:
+            continue
+        files = sorted({f for f, _ in hits})
+        label = path or admin_dir
+        params = {"admin_dir": admin_dir, "path": path, "files": files}
+        if repoint:
+            steps.append(PlanStep(action="alternates_repoint", params=params))
+            warnings.append(
+                f"Will repoint submodule alternates that borrow from {label} "
+                f"to the primary store first: {', '.join(files)}"
+            )
+        else:
+            steps.append(PlanStep(action="alternates_refuse", params=params))
+            warnings.append(
+                f"Refusing: other worktrees borrow submodule objects from {label}. "
+                f"These alternates files point into it: {', '.join(files)}. "
+                "Re-run with repoint_alternates=True to point them at the "
+                "primary store first."
+            )
+    return steps, warnings
+
+
 def plan_finish(
     state: RepoState,
     plan_id: str,
@@ -620,6 +661,7 @@ def plan_finish(
     no_delete: bool | None = None,
     worktree_path: str | None = None,
     config: JetsamConfig | None = None,
+    repoint_alternates: bool = False,
 ) -> Plan:
     """Generate a plan for the 'finish' verb (merge PR, clean up branch).
 
@@ -627,6 +669,9 @@ def plan_finish(
         strategy: Merge strategy ("squash", "merge", "rebase"). None means use config.
         no_delete: Skip branch deletion. None means use config.delete_on_merge.
         worktree_path: If in a worktree, path to remove.
+        repoint_alternates: If other worktrees' submodules borrow objects from
+            worktree_path, repoint them to the primary store first instead of
+            refusing.
     """
     if config is None:
         config = load_config(state.repo_root)
@@ -665,6 +710,20 @@ def plan_finish(
 
     if state.dirty:
         warnings.append("Working tree has uncommitted changes")
+
+    # Before pr_merge: refuse (or repoint) if other trees borrow objects
+    # from the worktree that this plan removes.
+    if worktree_path:
+        from jetsam.worktree.integration import common_git_dir, worktree_admin_dir
+
+        common = common_git_dir(state.repo_root)
+        admin_dir = worktree_admin_dir(worktree_path, common) if common else None
+        if common and admin_dir:
+            guard_steps, guard_warnings = _alternates_guard_steps(
+                common, [(admin_dir, worktree_path)], repoint_alternates,
+            )
+            steps.extend(guard_steps)
+            warnings.extend(guard_warnings)
 
     # Merge the PR if one exists. state.pr is only populated when the caller
     # ran attach_open_pr() — build_state() alone always leaves it None.
@@ -873,10 +932,29 @@ def plan_tag(
 def plan_tidy(
     state: RepoState,
     plan_id: str,
+    repoint_alternates: bool = False,
 ) -> Plan:
-    """Generate a plan for the 'tidy' verb (prune merged branches + remotes)."""
+    """Generate a plan for the 'tidy' verb (prune merged branches + remotes).
+
+    Args:
+        repoint_alternates: If a stale worktree that ``git worktree prune``
+            would delete lends submodule objects to another worktree, repoint
+            the borrowers to the primary store first instead of refusing.
+    """
     steps: list[PlanStep] = []
     warnings: list[str] = []
+
+    # First: refuse (or repoint) if pruning would delete a lender store.
+    if state.worktree is not None:
+        from jetsam.worktree.integration import common_git_dir, stale_worktree_admin_dirs
+
+        common = common_git_dir(state.repo_root)
+        if common:
+            guard_steps, guard_warnings = _alternates_guard_steps(
+                common, stale_worktree_admin_dirs(common), repoint_alternates,
+            )
+            steps.extend(guard_steps)
+            warnings.extend(guard_warnings)
 
     # Prune stale remote-tracking refs
     steps.append(PlanStep(
